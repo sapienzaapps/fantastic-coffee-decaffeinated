@@ -1,0 +1,17 @@
+# This is the configuration file for the API service
+# Description of this part is present in the `main.go` file
+
+log:
+  level: debug
+#  methodname: false
+#  json: false
+#  destination: stderr
+#  file: /tmp/debug.log
+#  combinedtostdout: true
+#web:
+#  apihost: 0.0.0.0:3000
+#  debughost: 0.0.0.0:4000
+#  readtimeout: 5s
+#  writetimeout: 5s
+#  shutdowntimeout: 5s
+#  behindproxy: false

@@ -1,0 +1,13 @@
+/bin/
+/pkg/
+/src/
+.idea/
+*.iml
+*.exe
+.DS_Store
+.env
+*.wiki.git
+docker-compose.log
+/doc/html
+/doc/json
+/doc/markdown

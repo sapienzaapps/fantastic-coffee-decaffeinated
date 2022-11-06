@@ -1,0 +1,273 @@
+openapi: 3.0.0
+servers:
+  - url: "http://localhost:3000"
+info:
+  title: Fantastic Coffee (decaffeinated)
+  description: Fantastic Coffee (decaffeinated), the skeleton project for Web and Software architecture course
+  version: 1.0.0
+paths:
+  /status:
+    parameters:
+      - $ref: "#/components/parameters/XAppBuild"
+      - $ref: "#/components/parameters/XAppVersion"
+      - $ref: "#/components/parameters/XAppLanguage"
+      - $ref: "#/components/parameters/XAppPlatform"
+    get:
+      tags: ["General"]
+      operationId: getStatusMessage
+      summary: Get status message for the user about issues / updates
+      description: |-
+        The response contains a status message meant for the user. It might
+        contains information about current technical issues, update messages
+        or general information.
+      responses:
+        "200":
+          description: Status message available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusInfo"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /:
+    get:
+      tags: ["Group 1"]
+      operationId: index
+      summary: Get an index
+      description: |-
+        This is an example of an index API description
+      responses:
+        "200":
+          description: Successful
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+  /context:
+    parameters:
+      - $ref: "#/components/parameters/XAppBuild"
+      - $ref: "#/components/parameters/XAppVersion"
+      - $ref: "#/components/parameters/XAppLanguage"
+      - $ref: "#/components/parameters/XAppPlatform"
+    post:
+      tags: ["Group 1"]
+      operationId: getContext
+      summary: Another API example
+      description: |-
+        Example description 2
+      responses:
+        "200":
+          description: Request ok
+          headers:
+            X-Access-Token:
+              description: Access token for authenticated requests
+              schema: { type: string }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+  /authenticated:
+    parameters:
+      - $ref: "#/components/parameters/XAppBuild"
+      - $ref: "#/components/parameters/XAppVersion"
+      - $ref: "#/components/parameters/XAppLanguage"
+      - $ref: "#/components/parameters/XAppPlatform"
+    get:
+      tags: ["Group 2"]
+      operationId: getAuthenticatedExample
+      summary: Get an endpoint with authentication
+      description: |-
+        Get an endpoint with auth
+      security:
+        - LegacyAuth: []
+        - AppToken: []
+      responses:
+        "200":
+          description: Logout successful
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /pictures/{cat}:
+    parameters:
+      - $ref: "#/components/parameters/XAppBuild"
+      - $ref: "#/components/parameters/XAppVersion"
+      - $ref: "#/components/parameters/XAppLanguage"
+      - $ref: "#/components/parameters/XAppPlatform"
+      - $ref: "#/components/parameters/cat"
+    get:
+      tags: ["Cat pictures"]
+      operationId: getCatFromPicture
+      summary: Example of a parameter in URL
+      description: |-
+        Example of a parameter in URL
+      security:
+        - LegacyAuth: []
+      responses:
+        "200":
+          description: Student picture found
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+              example: Picture binary file
+        "404":
+          description: Student picture not found
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+
+  /autofeeder/{cat}:
+    parameters:
+      - $ref: "#/components/parameters/XAppBuild"
+      - $ref: "#/components/parameters/XAppVersion"
+      - $ref: "#/components/parameters/XAppLanguage"
+      - $ref: "#/components/parameters/XAppPlatform"
+      - $ref: "#/components/parameters/cat"
+    put:
+      tags: ["Autofeeder"]
+      operationId: createCatAutofeeder
+      summary: Example of PUT operation
+      security:
+        - LegacyAuth: []
+      responses:
+        "200":
+          description: Auto feed enabled
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    delete:
+      tags: ["Autofeeder"]
+      operationId: deleteCatAutofeeder
+      summary: Example of DELETE operation
+      security:
+        - LegacyAuth: []
+      responses:
+        "200":
+          description: Auto feed disabled
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /session/login:
+    parameters:
+      - $ref: "#/components/parameters/XAppBuild"
+      - $ref: "#/components/parameters/XAppVersion"
+      - $ref: "#/components/parameters/XAppLanguage"
+      - $ref: "#/components/parameters/XAppPlatform"
+    post:
+      tags: ["Session management"]
+      operationId: login
+      summary: Log-in into system
+      description: |-
+        Perform a log-in action using username and password credentials.
+        Returns a token which can be used in authenticated requests.
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                userid:
+                  type: string
+                  pattern: '^[a-zA-Z0-9]+$'
+                  minLength: 3
+                  maxLength: 255
+                password:
+                  type: string
+                  pattern: '^.*?$'
+                  minLength: 8
+                  maxLength: 255
+      responses:
+        "200":
+          description: Login successful
+          headers:
+            X-Access-Token:
+              description: Access token for authenticated requests
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: Login failed
+          headers:
+            X-Message:
+              description: Error message
+              schema: { type: string }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
+
+components:
+  schemas:
+    StatusInfo:
+      title: Status Info
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - info
+            - warning
+            - critical
+            - ""
+        title: { type: string }
+        message: { type: string }
+        url: { type: string }
+
+  responses:
+    Unauthorized:
+      description: The access token is missing or it's expired
+    BadRequest:
+      description: The request was not compliant with the documentation (eg. missing fields, etc)
+    InternalServerError:
+      description: The server encountered an internal error. Further info in server logs
+
+  securitySchemes:
+    LegacyAuth:
+      type: apiKey
+      in: header
+      name: X-App-Token
+      description: |-
+        App session token value. This value is sent by the server in the login
+        and session refresh APIs.
+
+  parameters:
+    XAppVersion:
+      schema:
+        type: string
+        pattern: '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$'
+        minLength: 1
+        maxLength: 10
+      name: X-App-Version
+      in: header
+      required: true
+      description: App human readable version ("semantic version" format)
+      allowEmptyValue: false
+    XAppBuild:
+      schema: { type: integer }
+      name: X-App-Build
+      in: header
+      required: true
+      description: App build number
+      allowEmptyValue: false
+    XAppLanguage:
+      schema:
+        type: string
+        pattern: '^[a-z]{2}([-_][A-Z]{2})?$'
+        minLength: 2
+        maxLength: 5
+      name: X-App-Language
+      in: header
+      required: true
+      description: App language in ISO 639-1 format
+      allowEmptyValue: false
+    XAppPlatform:
+      schema:
+        type: string
+        enum: [ios, android]
+      name: X-App-Platform
+      in: header
+      required: true
+      description: App operating system / platform
+      allowEmptyValue: false
+    cat:
+      schema:
+        type: string
+        pattern: '^[a-zA-Z]+$'
+        minLength: 3
+        maxLength: 10
+      name: cat
+      in: path
+      required: true
+      description: Cat
+      allowEmptyValue: false
