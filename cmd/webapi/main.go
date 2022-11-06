@@ -47,12 +47,11 @@ func main() {
 	}
 }
 
-// run executes the program. The body of this function performs the following steps:
+// run executes the program. The body of this function should perform the following steps:
 // * reads the configuration
 // * creates and configure the logger
 // * connects to any external resources (like databases, authenticators, etc.)
 // * creates an instance of the service/api package
-// * starts a debug server
 // * starts the principal web server (using the service/api.Router.Handler() for HTTP handlers)
 // * waits for any termination event: SIGTERM signal (UNIX), non-recoverable server error, etc.
 // * closes the principal web server
