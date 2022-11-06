@@ -26,6 +26,19 @@ The full version can be found in the "Fantastic Coffee" repository.
 Other project files include:
 * `open-npm.sh` starts a new (temporary) container using `node:lts` image for safe web frontend development (you don't want to use `npm` in your system, do you?)
 
+## Go vendoring
+
+This project uses [Go Vendoring](https://go.dev/ref/mod#vendoring). You must use `go mod vendor` after changing some dependency (`go get` or `go mod tidy`) and add all files under `vendor/` directory in your commit.
+
+For more information about vendoring:
+
+* https://go.dev/ref/mod#vendoring
+* https://www.ardanlabs.com/blog/2020/04/modules-06-vendoring.html
+
+## Node/NPM vendoring
+
+This repository contains the `webui/node_modules` directory with all dependencies for Vue.JS. You should commit the content of that directory and both `package.json` and `package-lock.json`.
+
 ## How to set up a new project from this template
 
 You need to:
