@@ -64,7 +64,7 @@ If you're using the WebUI and you want to embed it into the final executable:
 ```shell
 ./open-npm.sh
 # (inside the NPM container)
-npm run build-prod
+npm run build-embed
 exit
 # (outside the NPM container)
 go build -tags webui ./cmd/webapi/
