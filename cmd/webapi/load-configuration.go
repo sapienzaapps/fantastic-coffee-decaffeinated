@@ -24,6 +24,9 @@ type WebAPIConfiguration struct {
 		ShutdownTimeout time.Duration `conf:"default:5s"`
 	}
 	Debug bool
+	DB    struct {
+		Filename string `conf:"default:/tmp/decaf.db"`
+	}
 }
 
 // loadConfiguration creates a WebAPIConfiguration starting from flags, environment variables and configuration file.
