@@ -13,14 +13,8 @@ export default defineConfig(({command, mode, ssrBuild}) => {
 			}
 		},
 	};
-	if (command === 'serve') {
-		ret.define = {
-			"__API_URL__": JSON.stringify("http://localhost:3000"),
-		};
-	} else {
-		ret.define = {
-			"__API_URL__": JSON.stringify("/"),
-		};
-	}
+	ret.define = {
+		"__API_URL__": JSON.stringify("http://localhost:3000"),
+	};
 	return ret;
 })
