@@ -104,6 +104,17 @@ exit
 
 **Use these instructions only if you get an error. Do not use it if your build is OK**.
 
+### My build works when I use `npm run dev`, however there is a Javascript crash in production/grading
+
+Some errors in the code are somehow not shown in `vite` development mode. To preview the code that will be used in production/grading settings, use the following commands:
+
+```shell
+./open-npm.sh
+# (here you're inside the NPM container)
+npm run build-prod
+npm run preview
+```
+
 ## License
 
 See [LICENSE](LICENSE).
