@@ -86,6 +86,16 @@ If you want to launch the WebUI, open a new tab and launch:
 npm run dev
 ```
 
+## How to build for production / homework delivery
+
+```shell
+./open-npm.sh
+# (here you're inside the NPM container)
+npm run build-prod
+```
+
+For "Web and Software Architecture" students: before committing and pushing your work for grading, please read the section below named "My build works when I use `npm run dev`, however there is a Javascript crash in production/grading"
+
 ## Known issues
 
 ### Apple M1 / ARM: `failed to load config from`...
