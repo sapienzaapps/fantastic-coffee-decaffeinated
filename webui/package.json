@@ -2,10 +2,10 @@
 	"name": "teapot",
 	"version": "0.0.0",
 	"scripts": {
-		"dev": "vite",
-		"build-dev": "vite build --mode development",
-		"build-prod": "vite build --mode production",
-		"build-embed": "vite build --mode production --base=/dashboard/",
+		"dev": "yarn install --immutable --immutable-cache && vite",
+		"build-dev": "yarn install --immutable --immutable-cache && vite build --mode development",
+		"build-prod": "yarn install --immutable --immutable-cache && vite build --mode production",
+		"build-embed": "yarn install --immutable --immutable-cache && vite build --mode production --base=/dashboard/",
 		"preview": "vite preview --port 4173"
 	},
 	"dependencies": {
