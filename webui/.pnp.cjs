@@ -28,7 +28,8 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "./",\
         "packageDependencies": [\
           ["@vitejs/plugin-vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.0"],\
-          ["axios", "npm:0.27.2"],\
+          ["axios", "npm:0.28.0"],\
+          ["rollup", "npm:2.79.2"],\
           ["vite", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.11"],\
           ["vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.5.6"],\
           ["vue-router", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:4.4.5"]\
@@ -389,12 +390,13 @@ const RAW_RUNTIME_STATE =
       }]\
     ]],\
     ["axios", [\
-      ["npm:0.27.2", {\
-        "packageLocation": "./.yarn/cache/axios-npm-0.27.2-dbe3a48aea-2efaf18dd0.zip/node_modules/axios/",\
+      ["npm:0.28.0", {\
+        "packageLocation": "./.yarn/cache/axios-npm-0.28.0-3c9815353b-3bc408a755.zip/node_modules/axios/",\
         "packageDependencies": [\
-          ["axios", "npm:0.27.2"],\
-          ["follow-redirects", "virtual:dbe3a48aea1dd5649e16abaf23d4ae05582d2149e16141955113766a0f84f681baf358c77ddccfc82eb23e4ccc66c6c912df62a9c01f2a83f1842bf86cc297b1#npm:1.15.9"],\
-          ["form-data", "npm:4.0.0"]\
+          ["axios", "npm:0.28.0"],\
+          ["follow-redirects", "virtual:3c9815353b1b5f50f6a022959f137187c45bfc24d20e3586ad08022b07e24c42553785e511e110f3510c24ffdff4f09cd751c840e6c034ce5bbbea601f7b7321#npm:1.15.9"],\
+          ["form-data", "npm:4.0.0"],\
+          ["proxy-from-env", "npm:1.1.0"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -838,10 +840,10 @@ const RAW_RUNTIME_STATE =
         ],\
         "linkType": "SOFT"\
       }],\
-      ["virtual:dbe3a48aea1dd5649e16abaf23d4ae05582d2149e16141955113766a0f84f681baf358c77ddccfc82eb23e4ccc66c6c912df62a9c01f2a83f1842bf86cc297b1#npm:1.15.9", {\
-        "packageLocation": "./.yarn/__virtual__/follow-redirects-virtual-91ca32641c/0/cache/follow-redirects-npm-1.15.9-539785d34c-e3ab42d109.zip/node_modules/follow-redirects/",\
+      ["virtual:3c9815353b1b5f50f6a022959f137187c45bfc24d20e3586ad08022b07e24c42553785e511e110f3510c24ffdff4f09cd751c840e6c034ce5bbbea601f7b7321#npm:1.15.9", {\
+        "packageLocation": "./.yarn/__virtual__/follow-redirects-virtual-3e72a4b860/0/cache/follow-redirects-npm-1.15.9-539785d34c-e3ab42d109.zip/node_modules/follow-redirects/",\
         "packageDependencies": [\
-          ["follow-redirects", "virtual:dbe3a48aea1dd5649e16abaf23d4ae05582d2149e16141955113766a0f84f681baf358c77ddccfc82eb23e4ccc66c6c912df62a9c01f2a83f1842bf86cc297b1#npm:1.15.9"],\
+          ["follow-redirects", "virtual:3c9815353b1b5f50f6a022959f137187c45bfc24d20e3586ad08022b07e24c42553785e511e110f3510c24ffdff4f09cd751c840e6c034ce5bbbea601f7b7321#npm:1.15.9"],\
           ["@types/debug", null],\
           ["debug", null]\
         ],\
@@ -1391,6 +1393,15 @@ const RAW_RUNTIME_STATE =
         "linkType": "HARD"\
       }]\
     ]],\
+    ["proxy-from-env", [\
+      ["npm:1.1.0", {\
+        "packageLocation": "./.yarn/cache/proxy-from-env-npm-1.1.0-c13d07f26b-f0bb4a87cf.zip/node_modules/proxy-from-env/",\
+        "packageDependencies": [\
+          ["proxy-from-env", "npm:1.1.0"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
     ["resolve", [\
       ["patch:resolve@npm%3A1.22.8#optional!builtin<compat/resolve>::version=1.22.8&hash=c3c19d", {\
         "packageLocation": "./.yarn/cache/resolve-patch-4254c24959-f345cd37f5.zip/node_modules/resolve/",\
@@ -1417,6 +1428,14 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "./.yarn/cache/rollup-npm-2.79.1-94e707a9a3-df087b7013.zip/node_modules/rollup/",\
         "packageDependencies": [\
           ["rollup", "npm:2.79.1"],\
+          ["fsevents", "patch:fsevents@npm%3A2.3.3#optional!builtin<compat/fsevents>::version=2.3.3&hash=df0bf1"]\
+        ],\
+        "linkType": "HARD"\
+      }],\
+      ["npm:2.79.2", {\
+        "packageLocation": "./.yarn/cache/rollup-npm-2.79.2-1b08e69c0e-095ba0a828.zip/node_modules/rollup/",\
+        "packageDependencies": [\
+          ["rollup", "npm:2.79.2"],\
           ["fsevents", "patch:fsevents@npm%3A2.3.3#optional!builtin<compat/fsevents>::version=2.3.3&hash=df0bf1"]\
         ],\
         "linkType": "HARD"\
@@ -1598,7 +1617,8 @@ const RAW_RUNTIME_STATE =
         "packageDependencies": [\
           ["teapot", "workspace:."],\
           ["@vitejs/plugin-vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.0"],\
-          ["axios", "npm:0.27.2"],\
+          ["axios", "npm:0.28.0"],\
+          ["rollup", "npm:2.79.2"],\
           ["vite", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.11"],\
           ["vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.5.6"],\
           ["vue-router", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:4.4.5"]\
