@@ -29,7 +29,6 @@ const RAW_RUNTIME_STATE =
         "packageDependencies": [\
           ["@vitejs/plugin-vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.0"],\
           ["axios", "npm:0.28.0"],\
-          ["rollup", "npm:2.79.2"],\
           ["vite", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.11"],\
           ["vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.5.6"],\
           ["vue-router", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:4.4.5"]\
@@ -1424,14 +1423,6 @@ const RAW_RUNTIME_STATE =
       }]\
     ]],\
     ["rollup", [\
-      ["npm:2.79.1", {\
-        "packageLocation": "./.yarn/cache/rollup-npm-2.79.1-94e707a9a3-df087b7013.zip/node_modules/rollup/",\
-        "packageDependencies": [\
-          ["rollup", "npm:2.79.1"],\
-          ["fsevents", "patch:fsevents@npm%3A2.3.3#optional!builtin<compat/fsevents>::version=2.3.3&hash=df0bf1"]\
-        ],\
-        "linkType": "HARD"\
-      }],\
       ["npm:2.79.2", {\
         "packageLocation": "./.yarn/cache/rollup-npm-2.79.2-1b08e69c0e-095ba0a828.zip/node_modules/rollup/",\
         "packageDependencies": [\
@@ -1618,7 +1609,6 @@ const RAW_RUNTIME_STATE =
           ["teapot", "workspace:."],\
           ["@vitejs/plugin-vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.0"],\
           ["axios", "npm:0.28.0"],\
-          ["rollup", "npm:2.79.2"],\
           ["vite", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.2.11"],\
           ["vue", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:3.5.6"],\
           ["vue-router", "virtual:1cba25b1f60f949a90be2c2cb29a6b4f9366aa091092950a3b449fa4cd4ec226263ceb0fd872c141b131285e267474987d80305279a07ec18ceb71fbdeb753ac#npm:4.4.5"]\
@@ -1678,7 +1668,7 @@ const RAW_RUNTIME_STATE =
           ["less", null],\
           ["postcss", "npm:8.4.47"],\
           ["resolve", "patch:resolve@npm%3A1.22.8#optional!builtin<compat/resolve>::version=1.22.8&hash=c3c19d"],\
-          ["rollup", "npm:2.79.1"],\
+          ["rollup", "npm:2.79.2"],\
           ["sass", null],\
           ["stylus", null],\
           ["sugarss", null],\
