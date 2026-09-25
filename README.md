@@ -19,9 +19,8 @@ The full version can be found in the "Fantastic Coffee" repository.
 	* `service/globaltime` contains a wrapper package for `time.Time` (useful in unit testing)
 * `vendor/` is managed by Go, and contains a copy of all dependencies
 * `webui/` is an example of a web frontend in Vue.js; it includes:
-	* Bootstrap JavaScript framework
-	* a customized version of "Bootstrap dashboard" template
-	* feather icons as SVG
+	* Bootstrap 5 and Bootstrap Icons (installed with yarn)
+	* a small dashboard layout (responsive sidebar, light/dark color mode)
 	* Go code for release embedding
 
 Other project files include:
@@ -107,6 +106,9 @@ silently diverge. This is the most common and most painful mistake.
 * **NEVER reuse or reorder a version number.** Two `0003_...` files, or inserting a
   `0002` after `0003` was applied, breaks the ordering guarantees.
 * **NEVER make an old migration depend on new code or data.**
+* **NEVER write idempotent DDL** (for example `CREATE TABLE IF NOT EXISTS`).
+  Each migration is applied exactly once; see "Why migrations are not
+  idempotent" below.
 * **NEVER put `PRAGMA` statements in a migration**: pragmas cannot run inside a
   transaction. Configure them when opening the connection instead.
 * **NEVER commit a migration you have not tested from an empty database.**
@@ -115,6 +117,29 @@ Need to change something you already migrated? Write a **new** migration that
 changes the schema forward (add a column, drop a table, backfill data, ...). For
 example, to rename a column in SQLite: add the new column, copy the data, then
 drop the old one — in new migration files.
+
+### Why migrations are not idempotent
+
+A migration is applied **exactly once**. The runner guarantees this by recording
+each applied version in `schema_migrations` and by executing the migration and
+its version record inside a single transaction: a migration that fails is not
+recorded, and an applied migration is never run again.
+
+Because of that, migrations must **not** be written to be idempotent. In
+particular, do not use `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT
+EXISTS`, or similar:
+
+* If an object already exists with a **different** structure, `IF NOT EXISTS`
+  silently succeeds and leaves the database in a state that does not match the
+  migrations. You want that to fail loudly, not to be masked.
+* Many operations cannot be made idempotent at all (adding a column, backfilling
+  data, inserting seed rows), so idempotency is not a general solution and gives
+  a false sense of safety.
+* The migration history in `schema_migrations` — not the SQL — is the source of
+  truth for what has been applied.
+
+Write each migration as the single, unconditional change from the previous schema
+version to the next.
 
 ### Resetting your development database
 
