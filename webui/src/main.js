@@ -1,3 +1,8 @@
+// Bootstrap is a regular dependency now: import the CSS and only the JS plugin
+// actually used by the template (collapse powers the mobile navbar toggler).
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'bootstrap/js/dist/collapse'
+
 import {createApp, reactive} from 'vue'
 import App from './App.vue'
 import router from './router'
