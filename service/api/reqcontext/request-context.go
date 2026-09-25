@@ -7,7 +7,7 @@ Each value here should be assumed valid only per request only, with some excepti
 package reqcontext
 
 import (
-	"github.com/gofrs/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/sirupsen/logrus"
 )
 
