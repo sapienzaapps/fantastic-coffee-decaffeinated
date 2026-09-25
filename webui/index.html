@@ -5,6 +5,16 @@
 	<meta charset="UTF-8">
 	<link rel="icon" href="/favicon.ico"/>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script>
+		// Apply the saved (or system) color mode before the app renders to avoid a flash.
+		(function () {
+			var theme = localStorage.getItem('theme');
+			if (!theme) {
+				theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+			}
+			document.documentElement.setAttribute('data-bs-theme', theme);
+		})();
+	</script>
 </head>
 <body>
 <div id="app"></div>

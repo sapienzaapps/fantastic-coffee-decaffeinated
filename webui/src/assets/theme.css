@@ -1,0 +1,60 @@
+/*
+ * Theme
+ *
+ * A single accent color is mapped onto Bootstrap's primary/link colors, and the
+ * color mode (light/dark) is switched by setting data-bs-theme on <html>.
+ * Change --fc-accent in this file to re-theme the whole app.
+ */
+
+:root {
+	--fc-accent: #4f46e5;
+	--fc-accent-rgb: 79, 70, 229;
+	--fc-accent-hover: #4338ca;
+	--fc-accent-soft: rgba(var(--fc-accent-rgb), 0.12);
+
+	/* Bootstrap variables that are read back through CSS custom properties. */
+	--bs-primary: var(--fc-accent);
+	--bs-primary-rgb: var(--fc-accent-rgb);
+	--bs-link-color: var(--fc-accent);
+	--bs-link-color-rgb: var(--fc-accent-rgb);
+	--bs-link-hover-color: var(--fc-accent-hover);
+}
+
+[data-bs-theme="dark"] {
+	--fc-accent: #818cf8;
+	--fc-accent-rgb: 129, 140, 248;
+	--fc-accent-hover: #a5b4fc;
+	--fc-accent-soft: rgba(var(--fc-accent-rgb), 0.16);
+
+	--bs-link-hover-color: var(--fc-accent-hover);
+}
+
+/*
+ * Buttons and nav pills hard-code their colors at build time, so their
+ * component variables are re-mapped to the accent manually.
+ */
+.btn-primary {
+	--bs-btn-bg: var(--fc-accent);
+	--bs-btn-border-color: var(--fc-accent);
+	--bs-btn-hover-bg: var(--fc-accent-hover);
+	--bs-btn-hover-border-color: var(--fc-accent-hover);
+	--bs-btn-active-bg: var(--fc-accent-hover);
+	--bs-btn-active-border-color: var(--fc-accent-hover);
+	--bs-btn-disabled-bg: var(--fc-accent);
+	--bs-btn-disabled-border-color: var(--fc-accent);
+	--bs-btn-focus-shadow-rgb: var(--fc-accent-rgb);
+}
+
+.btn-outline-primary {
+	--bs-btn-color: var(--fc-accent);
+	--bs-btn-border-color: var(--fc-accent);
+	--bs-btn-hover-bg: var(--fc-accent);
+	--bs-btn-hover-border-color: var(--fc-accent);
+	--bs-btn-active-bg: var(--fc-accent);
+	--bs-btn-active-border-color: var(--fc-accent);
+	--bs-btn-focus-shadow-rgb: var(--fc-accent-rgb);
+}
+
+.nav-pills {
+	--bs-nav-pills-link-active-bg: var(--fc-accent);
+}
