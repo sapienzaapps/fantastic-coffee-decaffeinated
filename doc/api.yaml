@@ -62,6 +62,48 @@ paths:
               description: Access token for authenticated requests
               schema: { type: string }
         "500": { $ref: "#/components/responses/InternalServerError" }
+
+  /name:
+    get:
+      tags: ["Name"]
+      operationId: getName
+      summary: Read the stored name
+      description: |-
+        Returns the name stored in the example table. If no name has been set
+        yet, the server replies with 404.
+      responses:
+        "200":
+          description: Name found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NameInfo"
+        "404":
+          description: No name has been set yet
+        "500": { $ref: "#/components/responses/InternalServerError" }
+    put:
+      tags: ["Name"]
+      operationId: setName
+      summary: Store a name
+      description: |-
+        Stores (or replaces) the name in the example table. The stored name is
+        returned in the response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameInfo"
+      responses:
+        "200":
+          description: Name stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NameInfo"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+
   /authenticated:
     parameters:
       - $ref: "#/components/parameters/XAppBuild"
@@ -203,6 +245,16 @@ components:
         title: { type: string }
         message: { type: string }
         url: { type: string }
+
+    NameInfo:
+      title: Name Info
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Jerry
 
   responses:
     Unauthorized:
