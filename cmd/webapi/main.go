@@ -88,6 +88,14 @@ func run() error {
 		logger.Debug("database stopping")
 		_ = dbconn.Close()
 	}()
+
+	// Apply pending schema migrations before the API starts serving requests.
+	logger.Info("applying database migrations")
+	if err := database.Migrate(context.Background(), dbconn); err != nil {
+		logger.WithError(err).Error("error applying database migrations")
+		return fmt.Errorf("applying database migrations: %w", err)
+	}
+
 	db, err := database.New(dbconn)
 	if err != nil {
 		logger.WithError(err).Error("error creating AppDatabase")
