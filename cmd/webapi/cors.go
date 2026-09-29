@@ -15,7 +15,10 @@ func applyCORSHandler(h http.Handler) http.Handler {
 			"x-example-header",
 			"Content-Type",
 		},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS", "DELETE", "PUT"},
+		// Only the methods actually used by this sample API. Add the methods your own endpoints use (for example
+		// "POST" or "DELETE"); otherwise the browser will block them. OPTIONS (the CORS preflight request) is always
+		// handled automatically and must not be listed here.
+		AllowedMethods: []string{"GET", "PUT"},
 		// Do not modify the CORS origin and max age, they are used in the evaluation.
 		AllowedOrigins: []string{"*"},
 		MaxAge:         1,
