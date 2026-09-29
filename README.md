@@ -24,7 +24,7 @@ The full version can be found in the "Fantastic Coffee" repository.
 	* Go code for release embedding
 
 Other project files include:
-* `open-node.sh` starts a new (temporary) container using `node:20` image for safe and secure web frontend development (you don't want to use `node` in your system, do you?).
+* `open-node.sh` starts a new (temporary) container using `node:24` image for safe and secure web frontend development. It is the same node version used by us during the evaluation of your app.
 
 ## HTTP router
 
