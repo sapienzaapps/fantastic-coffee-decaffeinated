@@ -14,7 +14,7 @@ The full version can be found in the "Fantastic Coffee" repository.
 * `demo/` contains a demo config file
 * `doc/` contains the documentation (usually, for APIs, this means an OpenAPI file)
 * `service/` has all packages for implementing project-specific functionalities
-	* `service/api` contains an example of an API server
+	* `service/api` contains an example of an API server (see "HTTP router" below)
 	* `service/database` contains the data access layer: the `AppDatabase` interface and its SQLite implementation. The schema is managed with SQL migrations (see "Database migrations" below).
 	* `service/globaltime` contains a wrapper package for `time.Time` (useful in unit testing)
 * `vendor/` is managed by Go, and contains a copy of all dependencies
@@ -25,6 +25,21 @@ The full version can be found in the "Fantastic Coffee" repository.
 
 Other project files include:
 * `open-node.sh` starts a new (temporary) container using `node:20` image for safe and secure web frontend development (you don't want to use `node` in your system, do you?).
+
+## HTTP router
+
+A *router* (or *mux*) decides which handler function runs for an incoming HTTP
+request, based on its method and path, and extracts the variable parts of the
+path (for example the `id` in `/users/{id}`). Go's standard library includes one
+(`net/http.ServeMux`), but it is deliberately minimal. This project uses
+[chi](https://github.com/go-chi/chi), a small router that is fully compatible
+with `net/http` (the HTTP package of the Go standard library): handlers and
+middleware are plain
+`func(http.ResponseWriter, *http.Request)` functions, so no framework-specific
+types are involved and the standard library stays usable (the examples in the
+WASA book use plain `net/http`, and the same code works here). chi adds conveniences
+the standard router does not provide directly, such as route groups and a
+middleware ecosystem. The routes and middleware are wired in `service/api`.
 
 ## Go vendoring
 
