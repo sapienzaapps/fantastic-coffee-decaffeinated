@@ -5,6 +5,9 @@ in a dedicated package (if that logic is complex enough).
 To use this package, you should create a new instance with New() passing a valid Config. The resulting Router will have
 the Router.Handler() function that returns a handler that can be used in a http.Server (or in other middlewares).
 
+The HTTP layer is built on top of the chi router (https://github.com/go-chi/chi). Middleware is plain net/http
+middleware, and the request-specific data is carried in the request's context.Context (see the reqcontext package).
+
 Example:
 
 	// Create the API router
@@ -38,10 +41,12 @@ package api
 
 import (
 	"errors"
-	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
-	"github.com/julienschmidt/httprouter"
-	"github.com/sirupsen/logrus"
 	"net/http"
+
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/sirupsen/logrus"
 )
 
 // Config is used to provide dependencies and configuration to the New function.
@@ -72,21 +77,26 @@ func New(cfg Config) (Router, error) {
 		return nil, errors.New("database is required")
 	}
 
-	// Create a new router where we will register HTTP endpoints. The server will pass requests to this router to be
-	// handled.
-	router := httprouter.New()
-	router.RedirectTrailingSlash = false
-	router.RedirectFixedPath = false
-
-	return &_router{
-		router:     router,
+	rt := &_router{
 		baseLogger: cfg.Logger,
 		db:         cfg.Database,
-	}, nil
+	}
+
+	// Create a new router where we will register HTTP endpoints. The server will pass requests to this router to be
+	// handled. Middleware installed with Use runs on every request, in the order it is added.
+	router := chi.NewRouter()
+	router.Use(
+		middleware.RequestID,   // generates a request ID and stores it in the request context
+		rt.contextMiddleware,   // builds the request-specific context and logger
+		rt.recovererMiddleware, // logs panics through the request logger and replies with HTTP 500
+	)
+	rt.router = router
+
+	return rt, nil
 }
 
 type _router struct {
-	router *httprouter.Router
+	router *chi.Mux
 
 	// baseLogger is a logger for non-requests contexts, like goroutines or background tasks not started by a request.
 	// Use context logger if available (e.g., in requests) instead of this logger.

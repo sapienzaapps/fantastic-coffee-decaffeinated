@@ -7,7 +7,6 @@ import (
 
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
-	"github.com/julienschmidt/httprouter"
 )
 
 // nameInfo is the JSON representation of the example name, shared by the name
@@ -17,9 +16,11 @@ type nameInfo struct {
 }
 
 // getName is an example of an HTTP endpoint that reads data from the database
-// and returns it as JSON. It accepts a reqcontext.RequestContext (see
-// httpRouterHandler) to use the request-specific logger.
-func (rt *_router) getName(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
+// and returns it as JSON. It retrieves the request-specific logger from the
+// request context (see reqcontext.FromContext).
+func (rt *_router) getName(w http.ResponseWriter, r *http.Request) {
+	ctx := reqcontext.FromContext(r.Context())
+
 	name, err := rt.db.GetName()
 	if errors.Is(err, database.ErrNameNotFound) {
 		// The name has not been set yet.
