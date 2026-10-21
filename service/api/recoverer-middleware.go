@@ -20,6 +20,8 @@ func (rt *_router) recovererMiddleware(next http.Handler) http.Handler {
 			if rvr := recover(); rvr != nil {
 				// We don't recover http.ErrAbortHandler: the response must be
 				// aborted, and it is not an error worth logging.
+
+				//nolint:errorlint // recover() returns any, and http.ErrAbortHandler is an exact panic sentinel.
 				if rvr == http.ErrAbortHandler {
 					panic(rvr)
 				}
