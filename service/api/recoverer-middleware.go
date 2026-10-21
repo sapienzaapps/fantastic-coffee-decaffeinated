@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"runtime/debug"
 
@@ -21,8 +22,7 @@ func (rt *_router) recovererMiddleware(next http.Handler) http.Handler {
 				// We don't recover http.ErrAbortHandler: the response must be
 				// aborted, and it is not an error worth logging.
 
-				//nolint:errorlint // recover() returns any, and http.ErrAbortHandler is an exact panic sentinel.
-				if rvr == http.ErrAbortHandler {
+				if err, ok := rvr.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 					panic(rvr)
 				}
 
