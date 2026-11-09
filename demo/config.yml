@@ -1,17 +1,36 @@
-# This is the configuration file for the API service
-# Description of this part is present in the `main.go` file
+# Example configuration file for the web API.
+#
+# Start the web API with this file, from the repository root:
+#
+#   go run ./cmd/webapi/ --config-path demo/config.yml
+#
+# Every option is commented out, so the defaults are used (SQLite in /tmp/decaf.db, no object storage). Uncomment
+# only what you want to change. Values written here take precedence over environment variables and command line flags.
+#
+# The db and s3 values below match the PostgreSQL and Garage services of demo/docker-compose.yml: see
+# DEV-ENVIRONMENT.md (in the repository root) for how to start and prepare them.
 
-log:
-  level: debug
-#  methodname: false
-#  json: false
-#  destination: stderr
-#  file: /tmp/debug.log
-#  combinedtostdout: true
+# Print debug messages in the log.
+#debug: true
+
+# The addresses where the web API listens, and its HTTP timeouts (the values shown are the defaults).
 #web:
 #  apihost: 0.0.0.0:3000
 #  debughost: 0.0.0.0:4000
 #  readtimeout: 5s
 #  writetimeout: 5s
 #  shutdowntimeout: 5s
-#  behindproxy: false
+
+# The database. The default is SQLite, in the file /tmp/decaf.db; to use PostgreSQL, uncomment driver and dsn.
+#db:
+#  driver: postgres
+#  dsn: postgres://decaf:decaf@localhost:5432/decaf?sslmode=disable
+#  filename: /tmp/decaf.db      # SQLite only
+
+# The object storage. It is enabled only when endpoint is set: then all the other values are required (see DEV-ENVIRONMENT.md, step 5).
+#s3:
+#  endpoint: http://localhost:3900
+#  region: garage
+#  bucket: decaf
+#  accesskeyid: <key ID>
+#  secretaccesskey: <secret key>

@@ -1,0 +1,43 @@
+# Garage configuration used by demo/docker-compose.yml: a single Garage node, for development only. See
+# DEV-ENVIRONMENT.md (in the repository root) for how to set it up.
+# Reference: https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/
+#
+# !!! WARNING: rpc_secret and admin_token below are public (they are in this repository): never use this file for
+# !!! anything reachable from the Internet.
+
+# Where Garage stores its data. Both are Docker volumes, see demo/docker-compose.yml.
+# * data_dir holds the content of the objects (files), split into blocks.
+# * metadata_dir holds everything else: buckets, access keys, the node identity, and the index of the objects (which
+#   objects exist and which blocks they are made of). Garage keeps it in an embedded database: a library inside the
+#   Garage process that stores its files here, not a separate database server to install.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+
+# The engine of that embedded database. The default, "lmdb", is the fastest, but it can corrupt the metadata if Garage
+# is not shut down cleanly, which is common on a development computer (sleep, a killed container, ...). "sqlite" is
+# slower but does not have this problem, and the speed difference does not matter here.
+db_engine = "sqlite"
+
+# A single node, so every object is stored once (no copies on other nodes).
+replication_factor = 1
+
+# Garage nodes talk to each other on this port, authenticated with rpc_secret (64 hex characters). With a single node,
+# it is used only by the node itself and by the `garage` command line tool inside the container.
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "decafdecafdecafdecafdecafdecafdecafdecafdecafdecafdecafdecafdeca"
+
+[s3_api]
+# The S3 API, used by the web API and by the browser (presigned URLs).
+api_bind_addr = "[::]:3900"
+# The region name that clients must use to sign their requests: it is CFG_S3_REGION for the web API.
+s3_region = "garage"
+# Needed only for "virtual-host style" bucket URLs (http://<bucket>.<root_domain>/...). The web API uses "path style"
+# URLs (http://localhost:3900/<bucket>/...), so any value works here.
+root_domain = ".s3.garage.localhost"
+
+[admin]
+# The admin API: an HTTP API to manage Garage (buckets, keys, CORS rules, ...), separate from the S3 API. Every request
+# must carry the header "Authorization: Bearer <admin_token>".
+api_bind_addr = "[::]:3903"
+admin_token = "decaf-admin-token"

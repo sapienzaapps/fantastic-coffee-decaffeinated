@@ -11,7 +11,7 @@ The full version can be found in the "Fantastic Coffee" repository.
 * `cmd/` contains all executables; Go programs here should only do "executable-stuff", like reading options from the CLI/env, etc.
 	* `cmd/healthcheck` is an example of a daemon for checking the health of servers daemons; useful when the hypervisor is not providing HTTP readiness/liveness probes (e.g., Docker engine)
 	* `cmd/webapi` contains an example of a web API server daemon
-* `demo/` contains a demo config file
+* `demo/` contains an example configuration file for the web API (`config.yml`), and a Docker Compose setup to run PostgreSQL and Garage on your computer (see `DEV-ENVIRONMENT.md`)
 * `doc/` contains the documentation (usually, for APIs, this means an OpenAPI file)
 * `service/` has all packages for implementing project-specific functionalities
 	* `service/api` contains an example of an API server (see "HTTP router" below)
@@ -29,6 +29,7 @@ The full version can be found in the "Fantastic Coffee" repository.
 	* Go code for release embedding
 
 Other project files include:
+* `DEV-ENVIRONMENT.md` is a step-by-step guide to run PostgreSQL and Garage on your computer, with the Docker Compose setup in `demo/`.
 * `open-node.sh` starts a new (temporary) container using `node:24` image for safe and secure web frontend development. It is the same node version used by us during the evaluation of your app.
 
 ## HTTP router
@@ -88,6 +89,8 @@ can be set with an environment variable, a command line flag or the configuratio
 | `DB.Driver` | `CFG_DB_DRIVER` | `--db-driver` | both (`sqlite` or `postgres`) |
 | `DB.Filename` | `CFG_DB_FILENAME` | `--db-filename` | SQLite: path of the database file (default `/tmp/decaf.db`) |
 | `DB.DSN` | `CFG_DB_DSN` | `--db-dsn` | PostgreSQL: connection string |
+
+`DEV-ENVIRONMENT.md` explains how to run a PostgreSQL instance on your machine using Docker.
 
 For example, to run with PostgreSQL:
 
@@ -415,37 +418,8 @@ policy of the web API (`cmd/webapi/cors.go`); you can restrict it to the address
 ### Running Garage on your computer
 
 If you are given a ready Garage instance, you only need its endpoint, region, bucket and access key. To run your own
-for development, create a `garage.toml` file:
-
-```toml
-metadata_dir = "/var/lib/garage/meta"
-data_dir = "/var/lib/garage/data"
-db_engine = "sqlite"
-replication_factor = 1
-rpc_bind_addr = "[::]:3901"
-rpc_public_addr = "127.0.0.1:3901"
-rpc_secret = "<the output of: openssl rand -hex 32>"
-
-[s3_api]
-s3_region = "eu-south-1"
-api_bind_addr = "[::]:3900"
-root_domain = ".s3.garage.localhost"
-```
-
-then start Garage and create a bucket and an access key:
-
-```shell
-docker run -d --name garage -p 3900:3900 -v ./garage.toml:/etc/garage.toml:ro dxflrs/garage:v2.1.0
-docker exec garage /garage node id -q        # prints <node ID>@...: use the part before @ below
-docker exec garage /garage layout assign -z dc1 -c 1G <node ID>
-docker exec garage /garage layout apply --version 1
-docker exec garage /garage bucket create wasatextplus
-docker exec garage /garage key create wasatextplus-key   # prints the key ID and the secret key
-docker exec garage /garage bucket allow --read --write --owner wasatextplus --key wasatextplus-key
-```
-
-Finally, apply the CORS rule (see above). The data is stored inside the container: it is lost when the container is
-removed.
+for development, follow the step-by-step guide in `DEV-ENVIRONMENT.md`: it explains how to run Garage and PostgreSQL with Docker
+Compose, how to prepare it (storage layout, bucket, access key and CORS rule) and how to connect the web API to it.
 
 ### Removing object storage
 

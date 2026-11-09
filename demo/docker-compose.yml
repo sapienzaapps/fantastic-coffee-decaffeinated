@@ -1,0 +1,56 @@
+# Example Docker Compose file that runs, on your computer, the external services the web API can use:
+#
+#   * postgres - a PostgreSQL server (needed only if you use PostgreSQL instead of SQLite)
+#   * garage   - a Garage server, an S3-compatible object storage (needed only if you store files)
+#
+# The web API itself is not started here: run it as usual with `go run ./cmd/webapi/`, pointing it to these services.
+#
+# A new Garage server must be configured once before it can be used (storage layout, bucket, access key, CORS rule):
+# follow the step-by-step guide in DEV-ENVIRONMENT.md (in the repository root), which also explains how to connect the
+# web API.
+#
+# !!! WARNING: this file is for development only. The passwords and secrets in this directory are public (they are in
+# !!! this repository): never use them, or this setup, for anything reachable from the Internet.
+
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      # The official image creates this user and database at the first start (when its volume is empty).
+      POSTGRES_USER: decaf
+      POSTGRES_PASSWORD: decaf
+      POSTGRES_DB: decaf
+    ports:
+      # "<port on your computer>:<port in the container>". Change the first number if 5432 is already in use on your
+      # computer (for example, by a PostgreSQL installed on it), and update dsn in demo/config.yml accordingly.
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # "healthy" once PostgreSQL accepts connections (visible in `docker compose ps`).
+      test: ["CMD", "pg_isready", "-U", "decaf", "-d", "decaf"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  garage:
+    image: dxflrs/garage:v2.5.0
+    volumes:
+      # The Garage configuration, read-only. See demo/garage.toml for the details.
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    ports:
+      # S3 API. This is the endpoint in demo/config.yml, and it is also the address put in the presigned URLs: the
+      # browser must be able to reach it. If you change the first number, update endpoint in demo/config.yml too.
+      - "3900:3900"
+      # Admin API, used to manage Garage with HTTP requests (DEV-ENVIRONMENT.md uses it to set the bucket CORS rule).
+      # "127.0.0.1:" makes it reachable only from your computer, not from other computers on your network.
+      - "127.0.0.1:3903:3903"
+
+volumes:
+  # Named volumes managed by Docker: they keep the data between `down` and `up`. `down -v` deletes them.
+  postgres-data:
+  garage-meta:
+  garage-data:
