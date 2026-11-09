@@ -1,30 +1,28 @@
 /*
-Package database is the middleware between the app database and the code. All data (de)serialization (save/load) from a
-persistent database are handled here. Database specific logic should never escape this package.
+Package database defines the contract between the app and its data layer. All data (de)serialization (save/load) from
+a persistent database is hidden behind the AppDatabase interface: the rest of the program (for example the API
+handlers) depends only on that interface, never on a concrete database.
 
-The database schema is defined by the SQL migrations embedded in this package
-(see the migrations/ directory and the Migrate function). Apply them before
-using an AppDatabase instance:
+Each supported database has its own implementation in a sub-package, with its own SQL and its own migrations:
 
-	// Apply pending schema migrations first.
-	if err := database.Migrate(ctx, db); err != nil {
-		return fmt.Errorf("migrating database: %w", err)
+  - service/database/sqlite: SQLite (a local file), the default
+  - service/database/postgres: PostgreSQL
+
+Both constructors open the connection, apply pending migrations and return an AppDatabase:
+
+	db, err := sqlite.New(ctx, "/tmp/decaf.db")
+	// or: db, err := postgres.New(ctx, "postgres://user:password@localhost:5432/decaf?sslmode=disable")
+	if err != nil {
+		return err
 	}
+	defer db.Close()
 
-	appdb, err := database.New(db)
-
-The concrete implementation returned by New must satisfy the AppDatabase
-interface. The rest of the program depends only on that interface, so a
-different data layer (for example, sqlc or an ORM) can be plugged in by
-providing another implementation of AppDatabase. See the "Database migrations"
-section of the README for details.
+To support another database or data layer (for example sqlc or an ORM), add another package that implements
+AppDatabase. See the "Database migrations" section of the README for details on migrations.
 */
 package database
 
-import (
-	"database/sql"
-	"errors"
-)
+import "errors"
 
 // AppDatabase is the high level interface for the DB
 type AppDatabase interface {
@@ -32,27 +30,9 @@ type AppDatabase interface {
 	SetName(name string) error
 
 	Ping() error
+	Close() error
 }
 
-type appdbimpl struct {
-	c *sql.DB
-}
-
-// New returns a new instance of AppDatabase based on the SQLite connection `db`.
-// `db` is required - an error will be returned if `db` is `nil`.
-//
-// New does not create or update the schema: call Migrate before New so that the
-// tables the methods rely on actually exist.
-func New(db *sql.DB) (AppDatabase, error) {
-	if db == nil {
-		return nil, errors.New("database is required when building a AppDatabase")
-	}
-
-	return &appdbimpl{
-		c: db,
-	}, nil
-}
-
-func (db *appdbimpl) Ping() error {
-	return db.c.Ping()
-}
+// ErrNameNotFound is returned by GetName when no name has been stored yet. The
+// API layer translates it into an HTTP 404 response.
+var ErrNameNotFound = errors.New("name not found")

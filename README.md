@@ -15,7 +15,11 @@ The full version can be found in the "Fantastic Coffee" repository.
 * `doc/` contains the documentation (usually, for APIs, this means an OpenAPI file)
 * `service/` has all packages for implementing project-specific functionalities
 	* `service/api` contains an example of an API server (see "HTTP router" below)
-	* `service/database` contains the data access layer: the `AppDatabase` interface and its SQLite implementation. The schema is managed with SQL migrations (see "Database migrations" below).
+	* `service/database` contains the data access layer: the `AppDatabase` interface and the shared migration runner. Two implementations are included; you can keep both or only the one you need (see "Choosing a database" below):
+		* `service/database/sqlite` implements `AppDatabase` with SQLite
+		* `service/database/postgres` implements `AppDatabase` with PostgreSQL
+	
+	  The schema is managed with SQL migrations (see "Database migrations" below).
 	* `service/globaltime` contains a wrapper package for `time.Time` (useful in unit testing)
 * `vendor/` is managed by Go, and contains a copy of all dependencies
 * `webui/` is an example of a web frontend in Vue.js; it includes:
@@ -50,10 +54,93 @@ For more information about vendoring:
 * https://go.dev/ref/mod#vendoring
 * https://www.ardanlabs.com/blog/2020/04/modules-06-vendoring.html
 
+## Choosing a database
+
+The project includes two complete examples of the data layer, one for each supported database:
+
+| | SQLite | PostgreSQL |
+|---|---|---|
+| Package | `service/database/sqlite` | `service/database/postgres` |
+| What you need | nothing: the database is a local file | a running PostgreSQL server |
+| Go driver | `github.com/mattn/go-sqlite3` | `github.com/jackc/pgx/v5` |
+| Query placeholders | `?` | `$1`, `$2`, ... |
+
+Both packages implement the same `database.AppDatabase` interface (`service/database/database.go`), so the API handlers
+work with either of them without any change.
+
+You can keep both and let whoever runs the program pick one at startup with the configuration (see "Selecting the
+database"), or support only one and delete the other (see "Deleting the database you do not use").
+
+Keep in mind that supporting both means doing everything twice: every `AppDatabase` method has to be implemented in
+both packages, and every migration has to be written in both `migrations/` directories, with the same file name and the
+SQL of each database.
+
+If you are a WASA student: keep in mind that WASAText strictly requires SQLite.
+
+### Selecting the database
+
+The database is selected with the `DB.Driver` configuration option (`sqlite` by default). Like every other option, it
+can be set with an environment variable, a command line flag or the configuration file:
+
+| Option | Environment variable | Flag | Used by |
+|---|---|---|---|
+| `DB.Driver` | `CFG_DB_DRIVER` | `--db-driver` | both (`sqlite` or `postgres`) |
+| `DB.Filename` | `CFG_DB_FILENAME` | `--db-filename` | SQLite: path of the database file (default `/tmp/decaf.db`) |
+| `DB.DSN` | `CFG_DB_DSN` | `--db-dsn` | PostgreSQL: connection string |
+
+For example, to run with PostgreSQL:
+
+```shell
+CFG_DB_DRIVER=postgres CFG_DB_DSN='postgres://user:password@localhost:5432/decaf?sslmode=disable' go run ./cmd/webapi/
+```
+
+or, in the configuration file:
+
+```yaml
+db:
+  driver: postgres
+  dsn: postgres://user:password@localhost:5432/decaf?sslmode=disable
+```
+
+### Deleting the database you do not use
+
+If you only require to support one database, you can safely delete the other implementation:
+
+1. Delete the directory of the database you do not use: `service/database/postgres/` if you need SQLite, or
+   `service/database/sqlite/` if you need PostgreSQL.
+2. In `cmd/webapi/main.go`, replace the `switch` on `cfg.DB.Driver` with a single call to the package you kept, and
+   remove the import of the deleted package (and of `strings`, which is used only by the `switch`). For example, if you
+   kept SQLite, the code becomes:
+
+   ```go
+   var db database.AppDatabase
+   logger.Infof("using SQLite database %s", cfg.DB.Filename)
+   db, err = sqlite.New(context.Background(), cfg.DB.Filename)
+   if err != nil {
+   	// ... unchanged
+   ```
+3. Remove the options you no longer use from `cmd/webapi/load-configuration.go` (`Driver`, and either
+   `Filename` or `DSN`).
+4. Run `go mod tidy` and then `go mod vendor` to remove the unused driver from `go.mod` and `vendor/` (see "Go vendoring"
+   above), and check that `go build ./...` still works.
+
+### Differences to keep in mind
+
+The two databases speak slightly different SQL. Write your queries and migrations in the SQL of each database you support:
+
+* **Placeholders**: SQLite uses `?`, PostgreSQL uses `$1`, `$2`, ...
+* **Auto-increment IDs**: SQLite uses `INTEGER PRIMARY KEY` (optionally `AUTOINCREMENT`), PostgreSQL uses
+  `INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY`.
+* **Getting the ID of an inserted row**: with PostgreSQL, `result.LastInsertId()` is **not** supported and always
+  returns an error. Use `INSERT ... RETURNING id` with `QueryRow(...).Scan(&id)` instead (this also works with SQLite).
+* **Types**: for example binary data is `BLOB` in SQLite and `BYTEA` in PostgreSQL.
+
 ## Database migrations
 
-The database schema is defined by a set of SQL *migrations* stored in
-`service/database/migrations/`. The files are embedded in the `webapi` executable at build time and applied automatically at every startup, before the server accepts requests.
+The database schema is defined by a set of SQL *migrations* stored in the `migrations/` directory of the database
+package you use (`service/database/sqlite/migrations/` or `service/database/postgres/migrations/`). The files are
+embedded in the `webapi` executable at build time and applied automatically at every startup, before the server accepts
+requests.
 
 ### What is a migration?
 
@@ -69,21 +156,23 @@ versioned together with the rest of the code.
 
 ### How Fantastic Coffee (decaffeinated) runs migrations
 
-* Migrations live in `service/database/migrations/` and are named with a
+* Migrations live in the `migrations/` directory of the database package
+  (`service/database/sqlite/migrations/` or `service/database/postgres/migrations/`) and are named with a
   zero-padded numeric prefix: `0001_init.sql`, `0002_add_users.sql`, ...
 * File names are sorted lexicographically, so the prefix defines the execution
   order. Keep it zero-padded and always increasing.
-* `service/database/migrations.go` embeds the whole directory with `//go:embed`
-  and exposes `database.Migrate(ctx, db)`.
-* `cmd/webapi/main.go` calls `database.Migrate` right after opening the
-  connection and before creating the API router. If a migration fails, the server
-  does not start.
+* Each database package embeds its `migrations/` directory with `//go:embed`. Its
+  `New` function (`sqlite.New` or `postgres.New`) opens the connection and calls
+  `database.Migrate` (`service/database/migrations.go`), the migration runner
+  shared by both packages.
+* `cmd/webapi/main.go` calls `New` before creating the API router. If a migration
+  fails, the server does not start.
 * Applied versions are recorded in the `schema_migrations` table (`version`,
   `applied_at`). On the next startup, already-applied migrations are skipped.
 * **Each migration runs inside a single transaction** together with the row that
   records it as applied. Either the whole migration is applied and recorded, or
-  nothing is. SQLite's DDL is transactional, so this also holds for schema
-  changes.
+  nothing is. Both SQLite and PostgreSQL support transactional DDL, so this also
+  holds for schema changes.
 * Migrations are **forward-only**: there is no automatic "undo". If a migration causes a problem, the usual approach is to fix it with a new migration rather than modifying or reverting the already-applied migration. For example, if 0005_add_status.sql introduces an incorrect schema change, create 0006_fix_status.sql that brings the database into the desired state. If the migration caused data corruption or a destructive change that cannot be safely repaired forward, restore the database from a backup taken before the migration and then apply the migrations again.
 
 ### Creating a migration
@@ -95,13 +184,25 @@ versioned together with the rest of the code.
    automatically.
 4. Commit the new `.sql` file together with the code that uses it.
 
-Example (`0003_add_posts.sql`):
+Example (`0003_add_posts.sql`) for SQLite:
 
 ```sql
 CREATE TABLE posts (
     id     INTEGER NOT NULL PRIMARY KEY,
     author TEXT    NOT NULL,
     body   TEXT    NOT NULL
+);
+
+CREATE INDEX idx_posts_author ON posts(author);
+```
+
+The same migration for PostgreSQL, with an automatically generated `id`:
+
+```sql
+CREATE TABLE posts (
+    id     INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    author TEXT NOT NULL,
+    body   TEXT NOT NULL
 );
 
 CREATE INDEX idx_posts_author ON posts(author);
@@ -124,8 +225,8 @@ silently diverge. This is the most common and most painful mistake.
 * **NEVER write idempotent DDL** (for example `CREATE TABLE IF NOT EXISTS`).
   Each migration is applied exactly once; see "Why migrations are not
   idempotent" below.
-* **NEVER put `PRAGMA` statements in a migration**: pragmas cannot run inside a
-  transaction. Configure them when opening the connection instead.
+* For SQLite, **NEVER put `PRAGMA` statements in a migration**: pragmas cannot run
+  inside a transaction. Configure them when opening the connection instead.
 * **NEVER commit a migration you have not tested from an empty database.**
 
 Need to change something you already migrated? Write a **new** migration that
@@ -159,14 +260,19 @@ version to the next.
 ### Resetting your development database
 
 Since migrations only go forward, the easiest way to start over while developing
-is to delete the database file (by default `/tmp/decaf.db`, or whatever
-`--db-filename` points to) and restart the server. The full set of migrations is
+is to empty the database and restart the server. The full set of migrations is
 re-applied to a fresh database.
+
+* **SQLite**: delete the database file (by default `/tmp/decaf.db`, or whatever
+  `--db-filename` points to).
+* **PostgreSQL**: drop and recreate the database (for example `DROP DATABASE decaf;`
+  and `CREATE DATABASE decaf;` from `psql`), or
+  simply recreate the PostgreSQL container if you run it with Docker/Podman.
 
 ### Advanced: using an ORM or sqlc
 
-> This is meant for advanced students only. In the course you are expected to use
-> the migration system described above. But if you are already an experienced backend developer and want to use advanced tools, keep reading
+> This is meant for advanced students only. In the WASA course you are expected to use
+> the migration system described above. But if you are already an experienced backend developer and want to use advanced tools (at your own risk), keep reading
 
 The migration system is the default and recommended data layer. If you already
 know what you are doing and want a different one, the project is designed so you
@@ -174,8 +280,8 @@ can plug it in without touching the API handlers:
 
 * All data access goes through the `database.AppDatabase` interface
   (`service/database/database.go`). Handlers depend on that interface, not on the
-  concrete SQLite implementation.
-* **sqlc**: point its `schema` setting at `service/database/migrations` (keep them
+  concrete SQLite or PostgreSQL implementation.
+* **sqlc**: point its `schema` setting at the `migrations/` directory of your database package (keep them
   forward-only, with no "down" files) and its `queries` setting at a directory of
   your own `.sql` files. Commit and vendor the generated code, then write a small
   adapter type that implements `AppDatabase` and pass it to `api.New` in
@@ -184,8 +290,8 @@ can plug it in without touching the API handlers:
   `AutoMigrate`: the migrations are the only source of truth for the schema. Map
   your models to the migrated tables and implement `AppDatabase` as a thin
   wrapper.
-* In both cases keep `Migrate` in the startup path. The handlers and the `api`
-  package should not need any change.
+* In both cases keep calling `database.Migrate` at startup, as `sqlite.New` and
+  `postgres.New` do. The handlers and the `api` package should not need any change.
 
 This section is intentionally just a pointer in the right direction: if you take
 this route, you are expected to work out the details yourself.
@@ -206,6 +312,7 @@ You need to:
 * Rewrite the API documentation `doc/api.yaml`
 * If no web frontend is expected, remove `webui` and `cmd/webapi/register-webui.go`
 * Update top/package comment inside `cmd/webapi/main.go` to reflect the actual project usage, goal, and general info
+* Pick the right database between SQLite, PostgreSQL, or support both. If you only need to support one, delete the other implementation (see "Choosing a database")
 * Update the code in `run()` function (`cmd/webapi/main.go`) to connect to databases or external resources
 * Write API code inside `service/api`, and create any further package inside `service/` (or subdirectories)
 

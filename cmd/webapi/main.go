@@ -25,17 +25,18 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database/postgres"
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database/sqlite"
 	"github.com/ardanlabs/conf/v3"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -77,30 +78,28 @@ func run() error {
 
 	logger.Infof("application initializing")
 
-	// Start Database
+	// Start Database: open the configured database and apply pending migrations
+	// before the API starts serving requests.
 	logger.Println("initializing database support")
-	dbconn, err := sql.Open("sqlite3", cfg.DB.Filename)
+	var db database.AppDatabase
+	switch strings.ToLower(cfg.DB.Driver) {
+	case "sqlite":
+		logger.Infof("using SQLite database %s", cfg.DB.Filename)
+		db, err = sqlite.New(context.Background(), cfg.DB.Filename)
+	case "postgres":
+		logger.Info("using PostgreSQL database")
+		db, err = postgres.New(context.Background(), cfg.DB.DSN)
+	default:
+		err = fmt.Errorf("unsupported database driver %q (use \"sqlite\" or \"postgres\")", cfg.DB.Driver)
+	}
 	if err != nil {
-		logger.WithError(err).Error("error opening SQLite DB")
-		return fmt.Errorf("opening SQLite: %w", err)
+		logger.WithError(err).Error("error initializing the database")
+		return fmt.Errorf("initializing the database: %w", err)
 	}
 	defer func() {
 		logger.Debug("database stopping")
-		_ = dbconn.Close()
+		_ = db.Close()
 	}()
-
-	// Apply pending schema migrations before the API starts serving requests.
-	logger.Info("applying database migrations")
-	if err := database.Migrate(context.Background(), dbconn); err != nil {
-		logger.WithError(err).Error("error applying database migrations")
-		return fmt.Errorf("applying database migrations: %w", err)
-	}
-
-	db, err := database.New(dbconn)
-	if err != nil {
-		logger.WithError(err).Error("error creating AppDatabase")
-		return fmt.Errorf("creating AppDatabase: %w", err)
-	}
 
 	// Start (main) API server
 	logger.Info("initializing API server")

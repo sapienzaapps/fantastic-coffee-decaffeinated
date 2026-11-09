@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"fmt"
 	"io/fs"
 	"path"
@@ -11,25 +10,28 @@ import (
 	"strings"
 )
 
-// migrationsFS embeds every .sql file in the migrations directory into the
-// executable. The files are the single source of truth for the database schema.
+// Migrate applies all pending SQL migrations in the migrations file system to
+// db. It is shared by the database implementations (see the sqlite and postgres
+// sub-packages), each of which embeds its own migrations directory and passes it
+// here. It is safe to call at every startup: already-applied migrations are
+// recorded in the schema_migrations table and skipped.
 //
-//go:embed migrations/*.sql
-var migrationsFS embed.FS
-
-// Migrate applies all pending SQL migrations to db. It is safe to call at every
-// startup: already-applied migrations are recorded in the schema_migrations
-// table and skipped.
+// Migrations are the *.sql files at the root of migrations, applied in
+// lexicographic order of their file name, so the numeric prefix (0001_, 0002_,
+// ...) defines the execution order. Each file is executed inside a single
+// transaction together with the row that records it as applied, so a failed
+// migration leaves the database unchanged.
 //
-// Migrations are applied in lexicographic order of their file name, so the
-// numeric prefix (0001_, 0002_, ...) defines the execution order. Each file is
-// executed inside a single transaction together with the row that records it as
-// applied, so a failed migration leaves the database unchanged.
-func Migrate(ctx context.Context, db *sql.DB) error {
+// recordSQL is the statement that records a version as applied, written with
+// the placeholder style of the database, for example
+// "INSERT INTO schema_migrations (version) VALUES (?)" for SQLite or
+// "INSERT INTO schema_migrations (version) VALUES ($1)" for PostgreSQL.
+func Migrate(ctx context.Context, db *sql.DB, migrations fs.FS, recordSQL string) error {
+	// TIMESTAMP and CURRENT_TIMESTAMP are understood by both SQLite and PostgreSQL.
 	if _, err := db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    TEXT NOT NULL PRIMARY KEY,
-    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 )`); err != nil {
 		return fmt.Errorf("creating schema_migrations table: %w", err)
 	}
@@ -39,9 +41,9 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 		return fmt.Errorf("reading applied migrations: %w", err)
 	}
 
-	files, err := fs.Glob(migrationsFS, "migrations/*.sql")
+	files, err := fs.Glob(migrations, "*.sql")
 	if err != nil {
-		return fmt.Errorf("listing embedded migrations: %w", err)
+		return fmt.Errorf("listing migrations: %w", err)
 	}
 	sort.Strings(files)
 
@@ -51,11 +53,11 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 			continue
 		}
 
-		script, err := migrationsFS.ReadFile(file)
+		script, err := fs.ReadFile(migrations, file)
 		if err != nil {
 			return fmt.Errorf("reading migration %s: %w", version, err)
 		}
-		if err := applyMigration(ctx, db, version, string(script)); err != nil {
+		if err := applyMigration(ctx, db, recordSQL, version, string(script)); err != nil {
 			return err
 		}
 	}
@@ -85,7 +87,7 @@ func appliedVersions(ctx context.Context, db *sql.DB) (map[string]bool, error) {
 
 // applyMigration executes a single migration script and records it as applied,
 // atomically.
-func applyMigration(ctx context.Context, db *sql.DB, version, script string) error {
+func applyMigration(ctx context.Context, db *sql.DB, recordSQL, version, script string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("starting transaction for migration %s: %w", version, err)
@@ -96,8 +98,7 @@ func applyMigration(ctx context.Context, db *sql.DB, version, script string) err
 	if _, err := tx.ExecContext(ctx, script); err != nil {
 		return fmt.Errorf("executing migration %s: %w", version, err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schema_migrations (version) VALUES (?)`, version); err != nil {
+	if _, err := tx.ExecContext(ctx, recordSQL, version); err != nil {
 		return fmt.Errorf("recording migration %s: %w", version, err)
 	}
 	if err := tx.Commit(); err != nil {

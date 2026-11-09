@@ -25,7 +25,13 @@ type WebAPIConfiguration struct {
 	}
 	Debug bool
 	DB    struct {
+		// Driver selects the database engine: "sqlite" or "postgres".
+		Driver string `conf:"default:sqlite"`
+		// Filename is the SQLite database file (used only when Driver is "sqlite").
 		Filename string `conf:"default:/tmp/decaf.db"`
+		// DSN is the PostgreSQL connection string (used only when Driver is "postgres"), e.g.
+		// postgres://user:password@localhost:5432/decaf?sslmode=disable
+		DSN string `conf:"mask"`
 	}
 }
 
