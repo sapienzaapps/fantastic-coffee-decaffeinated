@@ -1,0 +1,667 @@
+/*
+ * MinIO Go Library for Amazon S3 Compatible Cloud Storage
+ * Copyright 2015-2023 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package minio
+
+import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"hash"
+	"io"
+	"math/bits"
+	"net/http"
+	"sort"
+	"strings"
+
+	"github.com/cespare/xxhash/v2"
+	"github.com/klauspost/crc32"
+	"github.com/minio/crc64nvme"
+	"github.com/zeebo/xxh3"
+)
+
+// ChecksumMode contains information about the checksum mode on the object
+type ChecksumMode uint32
+
+const (
+	// ChecksumFullObjectMode Full object checksum `csumCombine(csum1, csum2...)...), csumN...)`
+	ChecksumFullObjectMode ChecksumMode = 1 << iota
+
+	// ChecksumCompositeMode Composite checksum `csum([csum1 + csum2 ... + csumN])`
+	ChecksumCompositeMode
+
+	// Keep after all valid checksums
+	checksumLastMode
+
+	// checksumModeMask is a mask for valid checksum mode types.
+	checksumModeMask = checksumLastMode - 1
+
+	// ChecksumUnknownMode indicates no or unknown checksum mode.
+	ChecksumUnknownMode ChecksumMode = 0
+)
+
+// Is returns if c is all of t.
+func (c ChecksumMode) Is(t ChecksumMode) bool {
+	return c&t == t
+}
+
+// Key returns the header key.
+func (c ChecksumMode) Key() string {
+	return amzChecksumMode
+}
+
+func (c ChecksumMode) String() string {
+	switch c & checksumModeMask {
+	case ChecksumFullObjectMode:
+		return amzChecksumModeFullObject
+	case ChecksumCompositeMode:
+		return amzChecksumModeComposite
+	}
+	return ""
+}
+
+// ChecksumType contains information about the checksum type.
+type ChecksumType uint32
+
+const (
+
+	// ChecksumSHA256 indicates a SHA256 checksum.
+	ChecksumSHA256 ChecksumType = 1 << iota
+	// ChecksumSHA1 indicates a SHA-1 checksum.
+	ChecksumSHA1
+	// ChecksumCRC32 indicates a CRC32 checksum with IEEE table.
+	ChecksumCRC32
+	// ChecksumCRC32C indicates a CRC32 checksum with Castagnoli table.
+	ChecksumCRC32C
+	// ChecksumCRC64NVME indicates CRC64 with 0xad93d23594c93659 polynomial.
+	ChecksumCRC64NVME
+	// ChecksumMD5 indicates an MD5 checksum.
+	ChecksumMD5
+	// ChecksumSHA512 indicates a SHA-512 checksum.
+	ChecksumSHA512
+	// ChecksumXXHash64 indicates an XXHash64 checksum.
+	ChecksumXXHash64
+	// ChecksumXXHash3 indicates an XXH3-64 checksum.
+	ChecksumXXHash3
+	// ChecksumXXHash128 indicates an XXH3-128 checksum.
+	ChecksumXXHash128
+
+	// Keep after all valid checksums
+	checksumLast
+
+	// ChecksumFullObject is a modifier that can be used on CRC32 and CRC32C
+	// to indicate full object checksums.
+	ChecksumFullObject
+
+	// checksumMask is a mask for valid checksum types.
+	checksumMask = checksumLast - 1
+
+	// ChecksumNone indicates no checksum.
+	ChecksumNone ChecksumType = 0
+
+	// ChecksumFullObjectCRC32 indicates full object CRC32
+	ChecksumFullObjectCRC32 = ChecksumCRC32 | ChecksumFullObject
+
+	// ChecksumFullObjectCRC32C indicates full object CRC32C
+	ChecksumFullObjectCRC32C = ChecksumCRC32C | ChecksumFullObject
+
+	amzChecksumAlgo      = "x-amz-checksum-algorithm"
+	amzChecksumCRC32     = "x-amz-checksum-crc32"
+	amzChecksumCRC32C    = "x-amz-checksum-crc32c"
+	amzChecksumSHA1      = "x-amz-checksum-sha1"
+	amzChecksumSHA256    = "x-amz-checksum-sha256"
+	amzChecksumCRC64NVME = "x-amz-checksum-crc64nvme"
+	amzChecksumMD5       = "x-amz-checksum-md5"
+	amzChecksumSHA512    = "x-amz-checksum-sha512"
+	amzChecksumXXHash64  = "x-amz-checksum-xxhash64"
+	amzChecksumXXHash3   = "x-amz-checksum-xxhash3"
+	amzChecksumXXHash128 = "x-amz-checksum-xxhash128"
+	amzChecksumMode      = "x-amz-checksum-type"
+
+	amzChecksumModeComposite  = "COMPOSITE"
+	amzChecksumModeFullObject = "FULL_OBJECT"
+)
+
+// Base returns the base type, without modifiers.
+func (c ChecksumType) Base() ChecksumType {
+	return c & checksumMask
+}
+
+// Is returns if c is all of t.
+func (c ChecksumType) Is(t ChecksumType) bool {
+	return c&t == t
+}
+
+// Key returns the header key.
+// returns empty string if invalid or none.
+func (c ChecksumType) Key() string {
+	switch c & checksumMask {
+	case ChecksumCRC32:
+		return amzChecksumCRC32
+	case ChecksumCRC32C:
+		return amzChecksumCRC32C
+	case ChecksumSHA1:
+		return amzChecksumSHA1
+	case ChecksumSHA256:
+		return amzChecksumSHA256
+	case ChecksumCRC64NVME:
+		return amzChecksumCRC64NVME
+	case ChecksumMD5:
+		return amzChecksumMD5
+	case ChecksumSHA512:
+		return amzChecksumSHA512
+	case ChecksumXXHash64:
+		return amzChecksumXXHash64
+	case ChecksumXXHash3:
+		return amzChecksumXXHash3
+	case ChecksumXXHash128:
+		return amzChecksumXXHash128
+	}
+	return ""
+}
+
+// CanComposite will return if the checksum type can be used for composite multipart upload on AWS.
+func (c ChecksumType) CanComposite() bool {
+	switch c & checksumMask {
+	case ChecksumSHA256, ChecksumSHA1, ChecksumCRC32, ChecksumCRC32C,
+		ChecksumMD5, ChecksumSHA512, ChecksumXXHash64, ChecksumXXHash3, ChecksumXXHash128:
+		return true
+	}
+	return false
+}
+
+// CanMergeCRC will return if the checksum type can be used for multipart upload on AWS.
+func (c ChecksumType) CanMergeCRC() bool {
+	switch c & checksumMask {
+	case ChecksumCRC32, ChecksumCRC32C, ChecksumCRC64NVME:
+		return true
+	}
+	return false
+}
+
+// FullObjectRequested will return if the checksum type indicates full object checksum was requested.
+func (c ChecksumType) FullObjectRequested() bool {
+	switch c & (ChecksumFullObject | checksumMask) {
+	case ChecksumFullObjectCRC32C, ChecksumFullObjectCRC32, ChecksumCRC64NVME:
+		return true
+	}
+	return false
+}
+
+// KeyCapitalized returns the capitalized key as used in HTTP headers.
+func (c ChecksumType) KeyCapitalized() string {
+	return http.CanonicalHeaderKey(c.Key())
+}
+
+// RawByteLen returns the size of the un-encoded checksum.
+func (c ChecksumType) RawByteLen() int {
+	switch c & checksumMask {
+	case ChecksumCRC32, ChecksumCRC32C:
+		return 4
+	case ChecksumSHA1:
+		return sha1.Size
+	case ChecksumSHA256:
+		return sha256.Size
+	case ChecksumCRC64NVME:
+		return crc64nvme.Size
+	case ChecksumXXHash64, ChecksumXXHash3:
+		return 8
+	case ChecksumMD5:
+		return md5.Size
+	case ChecksumSHA512:
+		return sha512.Size
+	case ChecksumXXHash128:
+		return 16
+	}
+	return 0
+}
+
+const crc64NVMEPolynomial = 0xad93d23594c93659
+
+// Hasher returns a hasher corresponding to the checksum type.
+// Returns nil if no checksum.
+func (c ChecksumType) Hasher() hash.Hash {
+	switch c & checksumMask {
+	case ChecksumCRC32:
+		return crc32.NewIEEE()
+	case ChecksumCRC32C:
+		return crc32.New(crc32.MakeTable(crc32.Castagnoli))
+	case ChecksumSHA1:
+		return sha1.New()
+	case ChecksumSHA256:
+		return sha256.New()
+	case ChecksumCRC64NVME:
+		return crc64nvme.New()
+	case ChecksumMD5:
+		return md5.New()
+	case ChecksumSHA512:
+		return sha512.New()
+	case ChecksumXXHash64:
+		return xxhash.New()
+	case ChecksumXXHash3:
+		return xxh3.New()
+	case ChecksumXXHash128:
+		return xxh3.New128()
+	}
+	return nil
+}
+
+// IsSet returns whether the type is valid and known.
+func (c ChecksumType) IsSet() bool {
+	return bits.OnesCount32(uint32(c&checksumMask)) == 1
+}
+
+// SetDefault will set the checksum if not already set.
+func (c *ChecksumType) SetDefault(t ChecksumType) {
+	if !c.IsSet() {
+		*c = t
+	}
+}
+
+// EncodeToString the encoded hash value of the content provided in b.
+func (c ChecksumType) EncodeToString(b []byte) string {
+	if !c.IsSet() {
+		return ""
+	}
+	h := c.Hasher()
+	h.Write(b)
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+}
+
+// String returns the type as a string.
+// Empty string for unset and "<invalid>" if not valid.
+func (c ChecksumType) String() string {
+	switch c & checksumMask {
+	case ChecksumCRC32:
+		return "CRC32"
+	case ChecksumCRC32C:
+		return "CRC32C"
+	case ChecksumSHA1:
+		return "SHA1"
+	case ChecksumSHA256:
+		return "SHA256"
+	case ChecksumNone:
+		return ""
+	case ChecksumCRC64NVME:
+		return "CRC64NVME"
+	case ChecksumMD5:
+		return "MD5"
+	case ChecksumSHA512:
+		return "SHA512"
+	case ChecksumXXHash64:
+		return "XXHASH64"
+	case ChecksumXXHash3:
+		return "XXHASH3"
+	case ChecksumXXHash128:
+		return "XXHASH128"
+	}
+	return "<invalid>"
+}
+
+// Checksum returns the checksum for the given type.
+// Will return the empty string if not set.
+func (o ObjectInfo) Checksum(t ChecksumType) string {
+	switch {
+	case t.Is(ChecksumCRC32C):
+		return o.ChecksumCRC32C
+	case t.Is(ChecksumCRC32):
+		return o.ChecksumCRC32
+	case t.Is(ChecksumSHA1):
+		return o.ChecksumSHA1
+	case t.Is(ChecksumSHA256):
+		return o.ChecksumSHA256
+	case t.Is(ChecksumCRC64NVME):
+		return o.ChecksumCRC64NVME
+	case t.Is(ChecksumMD5):
+		return o.ChecksumMD5
+	case t.Is(ChecksumSHA512):
+		return o.ChecksumSHA512
+	case t.Is(ChecksumXXHash64):
+		return o.ChecksumXXHash64
+	case t.Is(ChecksumXXHash3):
+		return o.ChecksumXXHash3
+	case t.Is(ChecksumXXHash128):
+		return o.ChecksumXXHash128
+	}
+	return ""
+}
+
+// setChecksumAlgorithm fills in ChecksumAlgorithm from the checksum value the
+// object carries, when the server did not name the algorithm itself.
+// AWS never sends x-amz-checksum-algorithm on HEAD/GET and only reports
+// <ChecksumAlgorithm>/<ChecksumType> - never a value - when listing, while
+// AiStor reports the values as well, but only when listing with WithMetadata.
+// Deriving the name keeps ChecksumAlgorithm populated on every path.
+func (o *ObjectInfo) setChecksumAlgorithm() {
+	if o.ChecksumAlgorithm != "" {
+		return
+	}
+	for _, t := range [...]ChecksumType{
+		ChecksumCRC32, ChecksumCRC32C, ChecksumSHA1, ChecksumSHA256, ChecksumCRC64NVME,
+		ChecksumMD5, ChecksumSHA512, ChecksumXXHash64, ChecksumXXHash3, ChecksumXXHash128,
+	} {
+		if o.Checksum(t) != "" {
+			o.ChecksumAlgorithm = t.String()
+			return
+		}
+	}
+}
+
+// checksumVerifyingReader verifies the checksum of data as it is read.
+type checksumVerifyingReader struct {
+	io.ReadCloser
+	hash.Hash
+	expectChecksum string
+}
+
+// newChecksumVerifyingReader returns a checksum-verifying reader for obj,
+// wrapping the given response body, or nil if obj carries no usable checksum.
+func (c *Client) newChecksumVerifyingReader(obj ObjectInfo) *checksumVerifyingReader {
+	switch {
+	case obj.ChecksumCRC32 != "":
+		return &checksumVerifyingReader{Hash: ChecksumCRC32.Hasher(), expectChecksum: obj.ChecksumCRC32}
+	case obj.ChecksumCRC32C != "":
+		return &checksumVerifyingReader{Hash: ChecksumCRC32C.Hasher(), expectChecksum: obj.ChecksumCRC32C}
+	case obj.ChecksumSHA1 != "":
+		return &checksumVerifyingReader{Hash: ChecksumSHA1.Hasher(), expectChecksum: obj.ChecksumSHA1}
+	case obj.ChecksumSHA256 != "":
+		return &checksumVerifyingReader{Hash: c.sha256Hasher(), expectChecksum: obj.ChecksumSHA256}
+	case obj.ChecksumCRC64NVME != "":
+		return &checksumVerifyingReader{Hash: ChecksumCRC64NVME.Hasher(), expectChecksum: obj.ChecksumCRC64NVME}
+	case obj.ChecksumMD5 != "":
+		return &checksumVerifyingReader{Hash: c.md5Hasher(), expectChecksum: obj.ChecksumMD5}
+	case obj.ChecksumSHA512 != "":
+		return &checksumVerifyingReader{Hash: ChecksumSHA512.Hasher(), expectChecksum: obj.ChecksumSHA512}
+	case obj.ChecksumXXHash64 != "":
+		return &checksumVerifyingReader{Hash: ChecksumXXHash64.Hasher(), expectChecksum: obj.ChecksumXXHash64}
+	case obj.ChecksumXXHash3 != "":
+		return &checksumVerifyingReader{Hash: ChecksumXXHash3.Hasher(), expectChecksum: obj.ChecksumXXHash3}
+	case obj.ChecksumXXHash128 != "":
+		return &checksumVerifyingReader{Hash: ChecksumXXHash128.Hasher(), expectChecksum: obj.ChecksumXXHash128}
+	default:
+		return nil
+	}
+}
+
+func (c *checksumVerifyingReader) SetReader(r io.ReadCloser) {
+	c.ReadCloser = r
+}
+
+// Close returns any pooled hasher and closes the underlying reader if one is set.
+func (c *checksumVerifyingReader) Close() error {
+	if closer, ok := c.Hash.(interface{ Close() }); ok {
+		closer.Close()
+	}
+	if c.ReadCloser == nil {
+		return nil
+	}
+	return c.ReadCloser.Close()
+}
+
+// Read reads data and hashes it. At EOF the checksum is verified; on
+// mismatch the mismatch error is returned in place of io.EOF.
+func (c *checksumVerifyingReader) Read(p []byte) (int, error) {
+	n, err := c.ReadCloser.Read(p)
+	if n > 0 {
+		n2, werr := c.Write(p[:n])
+		if werr != nil {
+			return n, werr
+		}
+		if n2 != n {
+			return n, io.ErrShortWrite
+		}
+	}
+	if err == io.EOF {
+		if verr := c.VerifyChecksum(); verr != nil {
+			return n, verr
+		}
+	}
+	return n, err
+}
+
+// VerifyChecksum returns an error if the computed checksum does not match.
+func (c *checksumVerifyingReader) VerifyChecksum() error {
+	if got := base64.StdEncoding.EncodeToString(c.Sum(nil)); got != c.expectChecksum {
+		return fmt.Errorf("checksum mismatch, expected %s, got %s", c.expectChecksum, got)
+	}
+	return nil
+}
+
+// ChecksumReader reads all of r and returns a checksum of type c.
+// Returns any error that may have occurred while reading.
+func (c ChecksumType) ChecksumReader(r io.Reader) (Checksum, error) {
+	h := c.Hasher()
+	if h == nil {
+		return Checksum{}, nil
+	}
+	_, err := io.Copy(h, r)
+	if err != nil {
+		return Checksum{}, err
+	}
+	return NewChecksum(c, h.Sum(nil)), nil
+}
+
+// ChecksumBytes returns a checksum of the content b with type c.
+func (c ChecksumType) ChecksumBytes(b []byte) Checksum {
+	h := c.Hasher()
+	if h == nil {
+		return Checksum{}
+	}
+	n, err := h.Write(b)
+	if err != nil || n != len(b) {
+		// Shouldn't happen with these checksummers.
+		return Checksum{}
+	}
+	return NewChecksum(c, h.Sum(nil))
+}
+
+// Checksum is a type and encoded value.
+type Checksum struct {
+	Type ChecksumType
+	r    []byte
+}
+
+// NewChecksum sets the checksum to the value of b,
+// which is the raw hash output.
+// If the length of c does not match t.RawByteLen,
+// a checksum with ChecksumNone is returned.
+func NewChecksum(t ChecksumType, b []byte) Checksum {
+	if t.IsSet() && len(b) == t.RawByteLen() {
+		return Checksum{Type: t, r: b}
+	}
+	return Checksum{}
+}
+
+// NewChecksumString sets the checksum to the value of s,
+// which is the base 64 encoded raw hash output.
+// If the length of c does not match t.RawByteLen, it is not added.
+func NewChecksumString(t ChecksumType, s string) Checksum {
+	b, _ := base64.StdEncoding.DecodeString(s)
+	if t.IsSet() && len(b) == t.RawByteLen() {
+		return Checksum{Type: t, r: b}
+	}
+	return Checksum{}
+}
+
+// IsSet returns whether the checksum is valid and known.
+func (c Checksum) IsSet() bool {
+	return c.Type.IsSet() && len(c.r) == c.Type.RawByteLen()
+}
+
+// Encoded returns the encoded value.
+// Returns the empty string if not set or valid.
+func (c Checksum) Encoded() string {
+	if !c.IsSet() {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(c.r)
+}
+
+// Raw returns the raw checksum value if set.
+func (c Checksum) Raw() []byte {
+	if !c.IsSet() {
+		return nil
+	}
+	return c.r
+}
+
+// CompositeChecksum returns the composite checksum of all provided parts.
+func (c ChecksumType) CompositeChecksum(p []ObjectPart) (*Checksum, error) {
+	if !c.CanComposite() {
+		return nil, errors.New("cannot do composite checksum")
+	}
+	sort.Slice(p, func(i, j int) bool {
+		return p[i].PartNumber < p[j].PartNumber
+	})
+	c = c.Base()
+	crcBytes := make([]byte, 0, len(p)*c.RawByteLen())
+	for _, part := range p {
+		pCrc, err := part.ChecksumRaw(c)
+		if err != nil {
+			return nil, err
+		}
+		crcBytes = append(crcBytes, pCrc...)
+	}
+	h := c.Hasher()
+	h.Write(crcBytes)
+	return &Checksum{Type: c, r: h.Sum(nil)}, nil
+}
+
+// FullObjectChecksum will return the full object checksum from provided parts.
+func (c ChecksumType) FullObjectChecksum(p []ObjectPart) (*Checksum, error) {
+	if !c.CanMergeCRC() {
+		return nil, errors.New("cannot merge this checksum type")
+	}
+	c = c.Base()
+	sort.Slice(p, func(i, j int) bool {
+		return p[i].PartNumber < p[j].PartNumber
+	})
+
+	switch len(p) {
+	case 0:
+		return nil, errors.New("no parts given")
+	case 1:
+		check, err := p[0].ChecksumRaw(c)
+		if err != nil {
+			return nil, err
+		}
+		return &Checksum{
+			Type: c,
+			r:    check,
+		}, nil
+	}
+	var merged uint32
+	var merged64 uint64
+	first, err := p[0].ChecksumRaw(c)
+	if err != nil {
+		return nil, err
+	}
+	sz := p[0].Size
+	switch c {
+	case ChecksumCRC32, ChecksumCRC32C:
+		merged = binary.BigEndian.Uint32(first)
+	case ChecksumCRC64NVME:
+		merged64 = binary.BigEndian.Uint64(first)
+	}
+
+	poly32 := uint32(crc32.IEEE)
+	if c.Is(ChecksumCRC32C) {
+		poly32 = crc32.Castagnoli
+	}
+	for _, part := range p[1:] {
+		if part.Size == 0 {
+			continue
+		}
+		sz += part.Size
+		pCrc, err := part.ChecksumRaw(c)
+		if err != nil {
+			return nil, err
+		}
+		switch c {
+		case ChecksumCRC32, ChecksumCRC32C:
+			merged = crc32Combine(poly32, merged, binary.BigEndian.Uint32(pCrc), part.Size)
+		case ChecksumCRC64NVME:
+			merged64 = crc64Combine(bits.Reverse64(crc64NVMEPolynomial), merged64, binary.BigEndian.Uint64(pCrc), part.Size)
+		}
+	}
+	var tmp [8]byte
+	switch c {
+	case ChecksumCRC32, ChecksumCRC32C:
+		binary.BigEndian.PutUint32(tmp[:], merged)
+		return &Checksum{
+			Type: c,
+			r:    tmp[:4],
+		}, nil
+	case ChecksumCRC64NVME:
+		binary.BigEndian.PutUint64(tmp[:], merged64)
+		return &Checksum{
+			Type: c,
+			r:    tmp[:8],
+		}, nil
+	default:
+		return nil, errors.New("unknown checksum type")
+	}
+}
+
+func addAutoChecksumHeaders(opts *PutObjectOptions) {
+	if opts.UserMetadata == nil {
+		opts.UserMetadata = make(map[string]string, 1)
+	}
+
+	addChecksum := true
+	for k := range opts.UserMetadata {
+		if strings.HasPrefix(strings.ToLower(k), "x-amz-checksum-") {
+			addChecksum = false
+		}
+	}
+
+	if addChecksum && opts.AutoChecksum.IsSet() {
+		opts.UserMetadata[amzChecksumAlgo] = opts.AutoChecksum.String()
+		if opts.AutoChecksum.FullObjectRequested() {
+			opts.UserMetadata[amzChecksumMode] = ChecksumFullObjectMode.String()
+		}
+	}
+}
+
+func applyAutoChecksum(opts *PutObjectOptions, allParts []ObjectPart) {
+	if !opts.AutoChecksum.IsSet() {
+		return
+	}
+	if opts.AutoChecksum.CanComposite() && !opts.AutoChecksum.Is(ChecksumFullObject) {
+		// Add composite hash of hashes.
+		crc, err := opts.AutoChecksum.CompositeChecksum(allParts)
+		if err == nil {
+			opts.UserMetadata = map[string]string{
+				opts.AutoChecksum.Key(): crc.Encoded(),
+				amzChecksumMode:         ChecksumCompositeMode.String(),
+			}
+		}
+	} else if opts.AutoChecksum.CanMergeCRC() {
+		crc, err := opts.AutoChecksum.FullObjectChecksum(allParts)
+		if err == nil {
+			opts.UserMetadata = map[string]string{
+				opts.AutoChecksum.Key(): crc.Encoded(),
+				amzChecksumMode:         ChecksumFullObjectMode.String(),
+			}
+		}
+	}
+}

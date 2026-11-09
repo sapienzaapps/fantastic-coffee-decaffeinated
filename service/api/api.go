@@ -44,6 +44,7 @@ import (
 	"net/http"
 
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/objectstorage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
@@ -56,6 +57,10 @@ type Config struct {
 
 	// Database is the instance of database.AppDatabase where data are saved
 	Database database.AppDatabase
+
+	// Storage is the object storage where files are saved. It is optional: it is nil when no object storage is
+	// configured, so handlers that use it must check for nil first.
+	Storage objectstorage.ObjectStorage
 }
 
 // Router is the package API interface representing an API handler builder
@@ -80,6 +85,7 @@ func New(cfg Config) (Router, error) {
 	rt := &_router{
 		baseLogger: cfg.Logger,
 		db:         cfg.Database,
+		storage:    cfg.Storage,
 	}
 
 	// Create a new router where we will register HTTP endpoints. The server will pass requests to this router to be
@@ -103,4 +109,7 @@ type _router struct {
 	baseLogger logrus.FieldLogger
 
 	db database.AppDatabase
+
+	// storage is nil when no object storage is configured.
+	storage objectstorage.ObjectStorage
 }

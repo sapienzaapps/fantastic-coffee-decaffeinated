@@ -16,6 +16,10 @@ func (rt *_router) Handler() http.Handler {
 	rt.router.Get("/name", rt.getName)
 	rt.router.Put("/name", rt.setName)
 
+	// Example file routes (upload and download through the object storage, with presigned URLs)
+	rt.router.Get("/example-photo", rt.getExamplePhoto)
+	rt.router.Put("/example-photo", rt.setExamplePhoto)
+
 	// Special routes
 	rt.router.Get("/liveness", rt.liveness)
 

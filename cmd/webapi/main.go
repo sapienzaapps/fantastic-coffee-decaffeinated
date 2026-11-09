@@ -31,6 +31,8 @@ import (
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database/postgres"
 	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database/sqlite"
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/objectstorage"
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/objectstorage/s3"
 	"github.com/ardanlabs/conf/v3"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -101,6 +103,25 @@ func run() error {
 		_ = db.Close()
 	}()
 
+	// Start the object storage, only if an endpoint is configured: it is optional.
+	var storage objectstorage.ObjectStorage
+	if cfg.S3.Endpoint == "" {
+		logger.Info("object storage disabled (no S3 endpoint configured)")
+	} else {
+		logger.Infof("using S3 object storage at %s, bucket %s", cfg.S3.Endpoint, cfg.S3.Bucket)
+		storage, err = s3.New(context.Background(), s3.Config{
+			Endpoint:        cfg.S3.Endpoint,
+			Region:          cfg.S3.Region,
+			Bucket:          cfg.S3.Bucket,
+			AccessKeyID:     cfg.S3.AccessKeyID,
+			SecretAccessKey: cfg.S3.SecretAccessKey,
+		})
+		if err != nil {
+			logger.WithError(err).Error("error initializing the object storage")
+			return fmt.Errorf("initializing the object storage: %w", err)
+		}
+	}
+
 	// Start (main) API server
 	logger.Info("initializing API server")
 
@@ -117,6 +138,7 @@ func run() error {
 	apirouter, err := api.New(api.Config{
 		Logger:   logger,
 		Database: db,
+		Storage:  storage,
 	})
 	if err != nil {
 		logger.WithError(err).Error("error creating the API server instance")

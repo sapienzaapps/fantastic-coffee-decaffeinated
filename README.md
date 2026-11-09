@@ -20,6 +20,7 @@ The full version can be found in the "Fantastic Coffee" repository.
 		* `service/database/postgres` implements `AppDatabase` with PostgreSQL
 	
 	  The schema is managed with SQL migrations (see "Database migrations" below).
+	* `service/objectstorage` contains the (optional) file storage layer: the `ObjectStorage` interface, and its implementation for S3-compatible services in `service/objectstorage/s3` (see "Object storage" below)
 	* `service/globaltime` contains a wrapper package for `time.Time` (useful in unit testing)
 * `vendor/` is managed by Go, and contains a copy of all dependencies
 * `webui/` is an example of a web frontend in Vue.js; it includes:
@@ -298,6 +299,169 @@ this route, you are expected to work out the details yourself.
 
 However, keep in mind that any significant changes to the Fantastic Coffee project structure or template are made at your own risk. If such changes introduce problems or incompatibilities, students are responsible for resolving them, and we cannot provide support for issues caused by substantial modifications to the provided template.
 
+## Object storage
+
+Some applications need to store files (photos, attachments, ...). Files do not belong in the database: they go in an
+*object storage*, a service that stores each file (an *object*) under a name (a *key*, for example
+`photos/42.jpg`) inside a container (a *bucket*). The database stores only the key.
+
+This project works with any service compatible with the Amazon S3 API, for example
+[Garage](https://garagehq.deuxfleurs.fr/), MinIO or AWS S3, using the [minio-go](https://github.com/minio/minio-go)
+library:
+
+* `service/objectstorage/objectstorage.go` defines the `ObjectStorage` interface. The API handlers depend only on this
+  interface.
+* `service/objectstorage/s3` implements it for S3-compatible services.
+
+Object storage is **optional**: it is enabled only when the S3 endpoint is configured. Otherwise the web API starts
+without it, and the `Storage` field of `api.Config` is `nil`: handlers that use it must check for `nil` first (the
+example replies `503 Service Unavailable`).
+
+### Configuration
+
+| Environment variable | Flag | Example | Description |
+|---|---|---|---|
+| `CFG_S3_ENDPOINT` | `--s3-endpoint` | `http://localhost:3900` | S3 API endpoint, used both by the backend and for generating presigned URLs. It must start with `http://` or `https://`. If empty, object storage is disabled |
+| `CFG_S3_REGION` | `--s3-region` | `eu-south-1` | Region used for signing requests (for Garage, it is the `s3_region` value in `garage.toml`) |
+| `CFG_S3_BUCKET` | `--s3-bucket` | `wasatextplus` | Name of the bucket where files are stored. It must already exist |
+| `CFG_S3_ACCESS_KEY_ID` | `--s3-access-key-id` | `GK3515373e4c851ebaad366558` | Access key ID |
+| `CFG_S3_SECRET_ACCESS_KEY` | `--s3-secret-access-key` | `7d37d093...` | Secret access key |
+
+or, in the configuration file:
+
+```yaml
+s3:
+  endpoint: http://localhost:3900
+  region: eu-south-1
+  bucket: wasatextplus
+  accesskeyid: GK3515373e4c851ebaad366558
+  secretaccesskey: 7d37d093...
+```
+
+When the endpoint is set, all the other values are required, and the web API checks at startup that it can reach the
+bucket: if anything is wrong (a missing value, a wrong region or key, a bucket that does not exist), the server does
+not start and the error explains why.
+
+### Presigned URLs: how files are uploaded and downloaded
+
+Files are not sent through the web API. Instead, the web API gives the client a *presigned URL*: a temporary URL,
+signed with the access key, that allows the client (for example, the browser) to upload or download one specific file
+directly to/from the object storage. The web API only decides who can do what, and the files never pass through it.
+
+The example endpoints `PUT /example-photo` and `GET /example-photo` (`service/api/set-example-photo.go` and
+`service/api/get-example-photo.go`) upload and download a single JPEG photo, stored under the fixed key
+`example-photo`:
+
+1. The client asks to upload a photo, sending its size:
+   `PUT /example-photo` with body `{"size": 123456}`. The web API checks the size (maximum 10 MB) and replies with
+   `{"url": "...", "contentType": "image/jpeg"}`.
+2. The client uploads the photo directly to the object storage, with an HTTP `PUT` to that URL:
+
+   ```js
+   await fetch(reply.url, {method: "PUT", body: file, headers: {"Content-Type": reply.contentType}})
+   ```
+3. To show the photo, the client calls `GET /example-photo`, which replies with `{"url": "..."}` (or `404` if no photo
+   has been uploaded yet), and uses the URL directly, for example as the `src` of an `<img>`.
+
+Things to know:
+
+* **The size and the content type are part of the upload URL signature**: the object storage rejects the upload
+  (`403 Forbidden`) if the file has a different size or is sent with a different `Content-Type`. This is how the web API
+  enforces the maximum size. The object storage does not check that the file is really a JPEG: the client declares it.
+* **Presigned URLs expire** (after 5 minutes in the example): request a new one when needed, do not store them.
+* **The endpoint must be reachable by whoever uses the URL.** Presigned URLs contain the address of
+  `CFG_S3_ENDPOINT`, so it must be an address that the browser can reach (`http://localhost:3900` is fine while
+  developing on your computer), not a name that works only inside a Docker network.
+* In a real application, generate a new key for each file (for example, a random UUID) instead of a fixed one. After
+  the client uploads the file, call `Stat` to check that the upload actually happened (and its size and type) before
+  saving the key in the database.
+* The interface also has `Put` and `Get`, which upload and download through the web API. Use them only for files that
+  the backend creates itself (for example, generated thumbnails).
+
+### Bucket CORS (required for browsers)
+
+When the web UI uploads or downloads with `fetch`, the browser talks to the object storage, which is on a different
+origin than the web UI. The browser allows it only if the bucket has a CORS rule. Without it, uploads fail in the
+browser (`TypeError: Failed to fetch`, and in the console *"Response to preflight request doesn't pass access control
+check"*) even though they work with `curl`.
+
+Save this rule in `cors.json`:
+
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["*"],
+      "AllowedMethods": ["GET", "PUT"],
+      "AllowedHeaders": ["content-type"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
+```
+
+and apply it with any S3 client, for example the [AWS CLI](https://aws.amazon.com/cli/) (it can run in a container,
+using the `amazon/aws-cli` image):
+
+```shell
+AWS_ACCESS_KEY_ID=<key ID> AWS_SECRET_ACCESS_KEY=<secret key> AWS_DEFAULT_REGION=eu-south-1 \
+    aws --endpoint-url http://localhost:3900 s3api put-bucket-cors --bucket wasatextplus --cors-configuration file://cors.json
+```
+
+**Write `content-type` in lowercase.** Garage compares header names case-sensitively, and browsers send them in
+lowercase: with `Content-Type`, the browser upload fails. `"AllowedOrigins": ["*"]` allows any web page, like the CORS
+policy of the web API (`cmd/webapi/cors.go`); you can restrict it to the address of your web UI.
+
+### Running Garage on your computer
+
+If you are given a ready Garage instance, you only need its endpoint, region, bucket and access key. To run your own
+for development, create a `garage.toml` file:
+
+```toml
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "<the output of: openssl rand -hex 32>"
+
+[s3_api]
+s3_region = "eu-south-1"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+```
+
+then start Garage and create a bucket and an access key:
+
+```shell
+docker run -d --name garage -p 3900:3900 -v ./garage.toml:/etc/garage.toml:ro dxflrs/garage:v2.1.0
+docker exec garage /garage node id -q        # prints <node ID>@...: use the part before @ below
+docker exec garage /garage layout assign -z dc1 -c 1G <node ID>
+docker exec garage /garage layout apply --version 1
+docker exec garage /garage bucket create wasatextplus
+docker exec garage /garage key create wasatextplus-key   # prints the key ID and the secret key
+docker exec garage /garage bucket allow --read --write --owner wasatextplus --key wasatextplus-key
+```
+
+Finally, apply the CORS rule (see above). The data is stored inside the container: it is lost when the container is
+removed.
+
+### Removing object storage
+
+If your project does not need to store files, you can remove object storage completely:
+
+1. Delete the `service/objectstorage/` directory.
+2. Delete the example: `service/api/get-example-photo.go`, `service/api/set-example-photo.go`, and their two routes in
+   `service/api/api-handler.go`.
+3. In `service/api/api.go`, remove the `Storage` field from `Config`, the `storage` field from `_router` (and the line
+   that sets it in `New`), and the `objectstorage` import.
+4. In `cmd/webapi/main.go`, remove the block that starts the object storage, the `Storage: storage` line passed to
+   `api.New`, and the `objectstorage` and `s3` imports.
+5. In `cmd/webapi/load-configuration.go`, remove the `S3` block.
+6. Run `go mod tidy` and then `go mod vendor` to remove `minio-go` from `go.mod` and `vendor/`, and check that
+   `go build ./...` still works.
+
 ## Node/YARN vendoring
 
 This repository uses `yarn` and a vendoring technique that exploits the ["Offline mirror"](https://yarnpkg.com/features/caching). As for the Go vendoring, the dependencies are inside the repository.
@@ -313,6 +477,7 @@ You need to:
 * If no web frontend is expected, remove `webui` and `cmd/webapi/register-webui.go`
 * Update top/package comment inside `cmd/webapi/main.go` to reflect the actual project usage, goal, and general info
 * Pick the right database between SQLite, PostgreSQL, or support both. If you only need to support one, delete the other implementation (see "Choosing a database")
+* If you need to store files, configure the object storage; otherwise, you can remove it (see "Object storage")
 * Update the code in `run()` function (`cmd/webapi/main.go`) to connect to databases or external resources
 * Write API code inside `service/api`, and create any further package inside `service/` (or subdirectories)
 

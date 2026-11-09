@@ -33,6 +33,21 @@ type WebAPIConfiguration struct {
 		// postgres://user:password@localhost:5432/decaf?sslmode=disable
 		DSN string `conf:"mask"`
 	}
+	// S3 configures the (optional) S3-compatible object storage. It is enabled only when Endpoint is set; then all
+	// the other fields are required.
+	// The env and flag names are set explicitly because the conf library would otherwise split "S3" into "S_3".
+	S3 struct {
+		// Endpoint is the S3 API URL, including the scheme (http:// or https://), e.g. http://localhost:3900. It is
+		// used both by the backend and for generating presigned URLs.
+		Endpoint string `conf:"env:S3_ENDPOINT,flag:s3-endpoint"`
+		// Region is used for signing requests (for Garage, it is the s3_region value in garage.toml).
+		Region string `conf:"env:S3_REGION,flag:s3-region"`
+		// Bucket is the name of the bucket where files are stored.
+		Bucket string `conf:"env:S3_BUCKET,flag:s3-bucket"`
+		// AccessKeyID and SecretAccessKey are the credentials of the access key.
+		AccessKeyID     string `conf:"env:S3_ACCESS_KEY_ID,flag:s3-access-key-id"`
+		SecretAccessKey string `conf:"mask,env:S3_SECRET_ACCESS_KEY,flag:s3-secret-access-key"`
+	}
 }
 
 // loadConfiguration creates a WebAPIConfiguration starting from flags, environment variables and configuration file.
