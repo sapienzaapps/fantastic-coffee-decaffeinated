@@ -20,7 +20,7 @@ The full version can be found in the "Fantastic Coffee" repository.
 		* `service/database/postgres` implements `AppDatabase` with PostgreSQL
 	
 	  The schema is managed with SQL migrations (see "Database migrations" below).
-	* `service/objectstorage` contains the (optional) file storage layer: the `ObjectStorage` interface, and its implementation for S3-compatible services in `service/objectstorage/s3` (see "Object storage" below)
+	* `service/objectstorage` contains the object storage layer: the `ObjectStorage` interface, and its implementation for S3-compatible services in `service/objectstorage/s3` (see "Object storage" below)
 	* `service/globaltime` contains a wrapper package for `time.Time` (useful in unit testing)
 * `vendor/` is managed by Go, and contains a copy of all dependencies
 * `webui/` is an example of a web frontend in Vue.js; it includes:
@@ -489,6 +489,13 @@ If you want to launch the WebUI, open a new tab and launch:
 # (here you're inside the container)
 yarn run dev
 ```
+
+The WebUI sends its requests to the web API at `http://localhost:3000` (the default `apihost`). To try the WebUI from another device on your local network (for example, your phone), replace `localhost` with the IP
+address of your computer in the network (for example `CFG_API_URL=http://192.168.1.10:3000`): on the other device,
+`localhost` means the device itself, so the WebUI running there would look for the web API on that device instead of on
+your computer. Also add `--host` (`yarn run dev --host`), because by default the development server
+accepts connections only from your computer. If you use object storage, the same applies to the S3 `endpoint`, since it
+is the address the browser uses for the presigned URLs, and should be reachable by both the backend and the frontend.
 
 ## How to build for production / homework delivery
 
